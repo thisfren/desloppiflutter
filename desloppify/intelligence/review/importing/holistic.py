@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from desloppify.engine._scoring.policy.core import HOLISTIC_POTENTIAL
-from desloppify.engine._state.schema import StateModel
+from desloppify.engine._state.filtering import make_issue
+from desloppify.engine._state.merge import MergeScanOptions, merge_scan
+from desloppify.engine._state.schema import Issue, StateModel, utc_now
 from desloppify.intelligence.review.dimensions import normalize_dimension_name
 from desloppify.intelligence.review.dimensions.data import load_dimensions_for_lang
 from desloppify.intelligence.review.importing.assessments import store_assessments
@@ -31,7 +33,6 @@ from desloppify.intelligence.review.importing.state_helpers import (
     _lang_potentials,
 )
 from desloppify.intelligence.review.selection import hash_file
-from desloppify.state import MergeScanOptions, make_issue, merge_scan, utc_now
 
 
 def parse_holistic_import_payload(
@@ -107,7 +108,10 @@ def _validate_and_build_issues(
                 }
             )
             continue
-        assert issue is not None
+        if issue is None:
+            raise ValueError(
+                "review issue payload missing after validation succeeded"
+            )
 
         # Handle dismissed concern verdicts (no dimension/summary required).
         if issue.get("concern_verdict") == "dismissed":
@@ -234,7 +238,7 @@ def _auto_resolve_stale_holistic(
     if scoped_reimport and not scope_dimensions:
         return
 
-    def _should_resolve(issue: dict[str, Any]) -> bool:
+    def _should_resolve(issue: Issue) -> bool:
         if issue.get("detector") not in ("review", "concerns"):
             return False
         detail = issue.get("detail")
@@ -396,7 +400,7 @@ def _resolve_total_files(state: StateModel, lang_name: str | None) -> int:
     review_cache = state.get("review_cache", {})
     fallback = len(review_cache.get("files", {}))
 
-    codebase_metrics = state.get("codebase_metrics", {})
+    codebase_metrics: object = state.get("codebase_metrics", {})
     if not isinstance(codebase_metrics, dict):
         return fallback
 

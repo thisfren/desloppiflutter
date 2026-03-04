@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from desloppify.base.text.text_api import is_numeric
-from desloppify.engine._state.schema import StateModel
+from desloppify.base.text_utils import is_numeric
+from desloppify.engine._state.schema import StateModel, utc_now
 from desloppify.intelligence.review.dimensions import normalize_dimension_name
-from desloppify.state import utc_now
 
 
 def store_assessments(

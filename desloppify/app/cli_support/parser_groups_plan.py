@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 
-def _add_plan_parser(sub) -> None:
+def add_plan_parser(sub) -> None:
     p_plan = sub.add_parser(
         "plan",
         help="Living plan: generate, reorder, cluster, skip, note",
@@ -355,4 +355,4 @@ examples:
     commit_log_sub.add_parser("pr", help="Print PR body markdown (dry run)")
 
 
-__all__ = ["_add_plan_parser"]
+__all__ = ["add_plan_parser"]

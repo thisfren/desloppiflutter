@@ -14,8 +14,8 @@ __all__ = [
     "save_state",
 ]
 
-from desloppify.base.discovery.api import safe_write_text
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.discovery.file_paths import safe_write_text
+from desloppify.base.text_utils import is_numeric
 from desloppify.engine._state.schema import (
     CURRENT_VERSION,
     STATE_FILE,
@@ -25,9 +25,24 @@ from desloppify.engine._state.schema import (
     json_default,
     validate_state_invariants,
 )
-from desloppify.engine._state.scoring import _recompute_stats
 
 logger = logging.getLogger(__name__)
+
+
+def _recompute_stats(
+    state: StateModel,
+    scan_path: str | None = None,
+    *,
+    subjective_integrity_target: float | None = None,
+) -> None:
+    """Local wrapper to avoid import-time cycles during state bootstrapping."""
+    from desloppify.engine._scoring.state_integration import recompute_stats
+
+    recompute_stats(
+        state,
+        scan_path=scan_path,
+        subjective_integrity_target=subjective_integrity_target,
+    )
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -57,8 +72,19 @@ def load_state(path: Path | None = None) -> StateModel:
     except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as ex:
         backup = state_path.with_suffix(".json.bak")
         if backup.exists():
+            logger.warning(
+                "Primary state load failed for %s; attempting backup %s: %s",
+                state_path,
+                backup,
+                ex,
+            )
             try:
                 backup_data = _load_json(backup)
+                logger.warning(
+                    "Recovered state from backup %s after primary load failure at %s",
+                    backup,
+                    state_path,
+                )
                 print(
                     f"  ⚠ State file corrupted ({ex}), loaded from backup.",
                     file=sys.stderr,
@@ -72,8 +98,20 @@ def load_state(path: Path | None = None) -> StateModel:
                 TypeError,
                 AttributeError,
             ) as backup_ex:
+                logger.warning(
+                    "Backup state load failed from %s after corruption in %s: %s",
+                    backup,
+                    state_path,
+                    backup_ex,
+                )
                 logger.debug("Backup state load failed from %s: %s", backup, backup_ex)
 
+        logger.warning(
+            "State file load failed for %s and backup recovery was unavailable. "
+            "Falling back to empty state: %s",
+            state_path,
+            ex,
+        )
         print(f"  ⚠ State file corrupted ({ex}). Starting fresh.", file=sys.stderr)
         rename_failed = False
         try:
@@ -101,6 +139,11 @@ def load_state(path: Path | None = None) -> StateModel:
     try:
         return _normalize_loaded_state(data)
     except (ValueError, TypeError, AttributeError) as normalize_ex:
+        logger.warning(
+            "State invariants invalid for %s; falling back to empty state: %s",
+            state_path,
+            normalize_ex,
+        )
         print(
             f"  ⚠ State invariants invalid ({normalize_ex}). Starting fresh.",
             file=sys.stderr,

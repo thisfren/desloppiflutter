@@ -5,23 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.scoring_constants import (
     CONFIDENCE_WEIGHTS,
     HOLISTIC_MULTIPLIER,
 )
-from desloppify.engine._state.schema import StateModel
-from desloppify.state import (
-    score_snapshot as state_score_snapshot,
-)
-from desloppify.state import (
-    utc_now,
+from desloppify.engine._state.schema import Issue, StateModel, utc_now
+from desloppify.engine._state.schema_scores import (
+    get_objective_score,
+    get_overall_score,
+    get_strict_score,
 )
 
 
 def _score_snapshot(state: StateModel) -> tuple[float, float, float]:
-    scores = state_score_snapshot(state)
-    return scores.overall or 0.0, scores.objective or 0.0, scores.strict or 0.0
+    return (
+        get_overall_score(state) or 0.0,
+        get_objective_score(state) or 0.0,
+        get_strict_score(state) or 0.0,
+    )
 
 
 def render_empty_remediation_plan(state: StateModel, lang_name: str) -> str:
@@ -41,7 +43,7 @@ def render_empty_remediation_plan(state: StateModel, lang_name: str) -> str:
 
 def _collect_holistic_issues(
     state: StateModel,
-) -> list[tuple[str, dict[str, Any]]]:
+) -> list[tuple[str, Issue]]:
     issues = state.get("issues", {})
     return [
         (issue_id, issue)
@@ -67,7 +69,7 @@ def _entry_weight(confidence: str) -> float:
 
 
 def _build_entries(
-    holistic_issues: list[tuple[str, dict[str, Any]]], potential: int
+    holistic_issues: list[tuple[str, Issue]], potential: int
 ) -> tuple[list[dict[str, Any]], float]:
     entries: list[dict[str, Any]] = []
     total_weight = 0.0

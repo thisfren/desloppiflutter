@@ -6,7 +6,7 @@ Upgraded from generic_lang to full class-based plugin.
 
 from __future__ import annotations
 
-from desloppify.base.text.text_api import get_area
+from desloppify.base.discovery.paths import get_area
 from desloppify.engine.policy.zones import COMMON_ZONE_RULES, Zone, ZoneRule
 from desloppify.engine.hook_registry import register_lang_hooks
 from desloppify.languages import register_lang

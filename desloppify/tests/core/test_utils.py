@@ -8,13 +8,15 @@ import pytest
 import desloppify.base.text_utils as utils_text_mod
 import desloppify.base.discovery.paths as paths_api_mod
 import desloppify.base.tooling as tooling_mod
-from desloppify.base.discovery.api import (
-    clear_source_file_cache_for_tests,
-    find_source_files,
-    get_exclusions,
+from desloppify.base.discovery.file_paths import (
     matches_exclusion,
     rel,
     resolve_path,
+)
+from desloppify.base.discovery.source import (
+    clear_source_file_cache_for_tests,
+    find_source_files,
+    get_exclusions,
     set_exclusions,
 )
 from desloppify.base.search.grep import grep_count_files, grep_files, grep_files_containing

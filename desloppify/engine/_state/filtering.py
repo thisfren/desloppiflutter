@@ -16,7 +16,7 @@ __all__ = [
     "make_issue",
 ]
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.engine._state.schema import (
     Issue,
     StateModel,
@@ -126,8 +126,9 @@ def remove_ignored_issues(state: StateModel, pattern: str) -> int:
         issue["suppressed"] = True
         issue["suppressed_at"] = now
         issue["suppression_pattern"] = pattern
-    # Deferred import to avoid circular dependency with engine._state.scoring
-    from desloppify.engine._state.scoring import _recompute_stats
+    from desloppify.engine._scoring.state_integration import (
+        recompute_stats as _recompute_stats,
+    )
 
     _recompute_stats(state, scan_path=state.get("scan_path"))
     validate_state_invariants(state)

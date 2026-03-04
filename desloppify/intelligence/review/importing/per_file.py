@@ -6,7 +6,9 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from desloppify.engine._state.schema import StateModel
+from desloppify.engine._state.filtering import make_issue
+from desloppify.engine._state.merge import MergeScanOptions, merge_scan
+from desloppify.engine._state.schema import StateModel, utc_now
 from desloppify.intelligence.review.dimensions.data import load_dimensions_for_lang
 from desloppify.intelligence.review.importing.assessments import store_assessments
 from desloppify.intelligence.review.importing.cache import (
@@ -30,7 +32,6 @@ from desloppify.intelligence.review.importing.state_helpers import (
     _lang_potentials,
 )
 from desloppify.intelligence.review.selection import hash_file
-from desloppify.state import MergeScanOptions, make_issue, merge_scan, utc_now
 
 
 def parse_per_file_import_payload(

@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import shutil
-from functools import partial
-from pathlib import Path
-
-from desloppify.base.discovery.source import collect_exclude_dirs, find_py_files
-from desloppify.base.text.text_api import get_area
-from desloppify.engine.detectors.base import FunctionInfo
-from desloppify.engine.policy.zones import COMMON_ZONE_RULES, Zone, ZoneRule
+from desloppify.base.discovery.source import find_py_files
 from desloppify.engine.hook_registry import register_lang_hooks
+from desloppify.engine.policy.zones import COMMON_ZONE_RULES, Zone, ZoneRule
 from desloppify.languages import register_lang
 from desloppify.languages._framework.base.phase_builders import (
     detector_phase_security,
@@ -26,18 +20,32 @@ from desloppify.languages._framework.base.types import (
     LangSecurityResult,
 )
 from desloppify.languages.python import test_coverage as py_test_coverage_hooks
+from desloppify.languages.python._helpers import _get_py_area, py_extract_functions
+from desloppify.languages.python._review import (
+    PY_HOLISTIC_REVIEW_DIMENSIONS,
+    PY_LOW_VALUE_PATTERN,
+    PY_MIGRATION_MIXED_EXTENSIONS,
+    PY_MIGRATION_PATTERN_PAIRS,
+    PY_REVIEW_GUIDANCE,
+    py_review_api_surface,
+    py_review_module_patterns,
+)
+from desloppify.languages.python._security import (
+    detect_python_security,
+    missing_bandit_coverage,
+    python_scan_coverage_prerequisites,
+)
+from desloppify.languages.python._zones import PY_ZONE_RULES
 from desloppify.languages.python.commands import get_detect_commands
-from desloppify.languages.python.detectors.bandit_adapter import detect_with_bandit
 from desloppify.languages.python.detectors.deps import build_dep_graph
 from desloppify.languages.python.detectors.private_imports import (
     detect_private_imports as detect_python_private_imports,
 )
-from desloppify.languages.python.extractors import extract_py_functions
 from desloppify.languages.python.phases import (
-    PY_COMPLEXITY_SIGNALS as PY_COMPLEXITY_SIGNALS,
-)
-from desloppify.languages.python.phases import (
+    PY_COMPLEXITY_SIGNALS,
     PY_ENTRY_PATTERNS,
+    PY_GOD_RULES,
+    PY_SKIP_NAMES,
     phase_coupling,
     phase_dict_keys,
     phase_layer_violation,
@@ -49,114 +57,20 @@ from desloppify.languages.python.phases import (
     phase_unused,
     phase_unused_enums,
 )
-from desloppify.languages.python.phases import (
-    PY_GOD_RULES as PY_GOD_RULES,
-)
-from desloppify.languages.python.phases import (
-    PY_SKIP_NAMES as PY_SKIP_NAMES,
-)
-from desloppify.languages.python.review import (
-    HOLISTIC_REVIEW_DIMENSIONS as PY_HOLISTIC_REVIEW_DIMENSIONS,
-)
-from desloppify.languages.python.review import LOW_VALUE_PATTERN as PY_LOW_VALUE_PATTERN
-from desloppify.languages.python.review import (
-    MIGRATION_MIXED_EXTENSIONS as PY_MIGRATION_MIXED_EXTENSIONS,
-)
-from desloppify.languages.python.review import (
-    MIGRATION_PATTERN_PAIRS as PY_MIGRATION_PATTERN_PAIRS,
-)
-from desloppify.languages.python.review import REVIEW_GUIDANCE as PY_REVIEW_GUIDANCE
-from desloppify.languages.python.review import api_surface as py_review_api_surface
-from desloppify.languages.python.review import (
-    module_patterns as py_review_module_patterns,
-)
-
-# ── Zone classification rules (order matters — first match wins) ──
-
-PY_ZONE_RULES = [
-    ZoneRule(Zone.GENERATED, ["/migrations/", "_pb2.py", "_pb2_grpc.py"]),
-    ZoneRule(Zone.TEST, ["test_", "_test.py", "conftest.py", "/factories/"]),
-    ZoneRule(
-        Zone.CONFIG,
-        [
-            "setup.py",
-            "setup.cfg",
-            "pyproject.toml",
-            "manage.py",
-            "wsgi.py",
-            "asgi.py",
-            "settings.py",
-            "config.py",
-        ],
-    ),
-    ZoneRule(Zone.SCRIPT, ["__main__.py", "/commands/"]),
-] + COMMON_ZONE_RULES
-
 
 register_lang_hooks("python", test_coverage=py_test_coverage_hooks)
-
-
-_get_py_area = partial(get_area, min_depth=3)
-
-
-def _py_extract_functions(path: Path) -> list[FunctionInfo]:
-    """Extract all Python functions for duplicate detection."""
-    functions = []
-    for filepath in find_py_files(path):
-        functions.extend(extract_py_functions(filepath))
-    return functions
-
-
-def _scan_root_from_files(files: list[str]) -> Path | None:
-    """Derive the common ancestor directory from a list of file paths."""
-    import os
-
-    py_files = [f for f in files if f.endswith(".py")]
-    if not py_files:
-        return None
-    try:
-        common = Path(os.path.commonpath(py_files))
-        return common if common.is_dir() else common.parent
-    except ValueError:
-        return None
 
 
 @register_lang("python")
 class PythonConfig(LangConfig):
     def _missing_bandit_coverage(self) -> DetectorCoverageStatus:
-        return DetectorCoverageStatus(
-            detector="security",
-            status="reduced",
-            confidence=0.6,
-            summary="bandit is not installed — Python-specific security checks will be skipped.",
-            impact=(
-                "Python-specific security coverage is reduced; clean security output may "
-                "miss shell injection, unsafe deserialization, and risky SQL/subprocess patterns."
-            ),
-            remediation="Install Bandit: pip install bandit",
-            tool="bandit",
-            reason="missing_dependency",
-        )
+        return missing_bandit_coverage()
 
     def scan_coverage_prerequisites(self) -> list[DetectorCoverageStatus]:
-        if shutil.which("bandit") is not None:
-            return []
-        return [self._missing_bandit_coverage()]
+        return python_scan_coverage_prerequisites()
 
     def detect_lang_security_detailed(self, files, zone_map) -> LangSecurityResult:
-        scan_root = _scan_root_from_files(files)
-        if scan_root is None:
-            return LangSecurityResult(entries=[], files_scanned=0)
-
-        exclude_dirs = collect_exclude_dirs(scan_root)
-
-        result = detect_with_bandit(scan_root, zone_map, exclude_dirs=exclude_dirs)
-        coverage = result.status.coverage()
-        return LangSecurityResult(
-            entries=result.entries,
-            files_scanned=result.files_scanned,
-            coverage=coverage,
-        )
+        return detect_python_security(files, zone_map)
 
     def detect_private_imports(self, graph, zone_map):
         return detect_python_private_imports(graph, zone_map)
@@ -206,59 +120,24 @@ class PythonConfig(LangConfig):
             holistic_review_dimensions=PY_HOLISTIC_REVIEW_DIMENSIONS,
             migration_pattern_pairs=PY_MIGRATION_PATTERN_PAIRS,
             migration_mixed_extensions=PY_MIGRATION_MIXED_EXTENSIONS,
-            extract_functions=_py_extract_functions,
+            extract_functions=py_extract_functions,
             zone_rules=PY_ZONE_RULES,
         )
 
+
 __all__ = [
-    "shutil",
-    "partial",
-    "Path",
-    "get_area",
-    "find_py_files",
-    "FunctionInfo",
     "COMMON_ZONE_RULES",
-    "Zone",
-    "ZoneRule",
-    "register_lang_hooks",
-    "register_lang",
-    "detector_phase_security",
-    "detector_phase_signature",
-    "detector_phase_test_coverage",
-    "shared_subjective_duplicates_tail",
-    "phase_private_imports",
-    "DetectorCoverageStatus",
-    "DetectorPhase",
-    "LangConfig",
-    "LangSecurityResult",
-    "py_test_coverage_hooks",
-    "get_detect_commands",
-    "collect_exclude_dirs",
-    "detect_with_bandit",
-    "build_dep_graph",
-    "detect_python_private_imports",
-    "extract_py_functions",
     "PY_COMPLEXITY_SIGNALS",
     "PY_ENTRY_PATTERNS",
-    "phase_coupling",
-    "phase_dict_keys",
-    "phase_layer_violation",
-    "phase_mutable_state",
-    "phase_responsibility_cohesion",
-    "phase_smells",
-    "phase_structural",
-    "phase_uncalled_functions",
-    "phase_unused",
-    "phase_unused_enums",
     "PY_GOD_RULES",
-    "PY_SKIP_NAMES",
     "PY_HOLISTIC_REVIEW_DIMENSIONS",
     "PY_LOW_VALUE_PATTERN",
     "PY_MIGRATION_MIXED_EXTENSIONS",
     "PY_MIGRATION_PATTERN_PAIRS",
     "PY_REVIEW_GUIDANCE",
-    "py_review_api_surface",
-    "py_review_module_patterns",
+    "PY_SKIP_NAMES",
     "PY_ZONE_RULES",
     "PythonConfig",
+    "Zone",
+    "ZoneRule",
 ]

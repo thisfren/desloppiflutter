@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from desloppify.base.coercions import coerce_optional_str
 from desloppify.intelligence.review.dimensions.data import load_dimensions_for_lang
@@ -27,6 +27,19 @@ from .policy import (
     ASSESSMENT_POLICY_KEY,
     apply_assessment_import_policy,
 )
+
+
+class ImportRootPayload(TypedDict, total=False):
+    """Top-level import payload shape prior to strict normalization."""
+
+    issues: list[object]
+    findings: list[object]
+    assessments: dict[str, Any]
+    reviewed_files: list[object]
+    review_scope: dict[str, Any]
+    provenance: dict[str, Any]
+    dimension_notes: dict[str, Any]
+    _assessment_policy: dict[str, Any]
 
 
 class ImportPayloadLoadError(ValueError):
@@ -69,7 +82,7 @@ def _coerce_import_parse_options(
 
 
 def _normalize_import_payload_shape(
-    payload: dict[str, Any],
+    payload: ImportRootPayload,
 ) -> tuple[ReviewImportPayload | None, list[str]]:
     """Normalize payload into required-key contract with strict type checks."""
     errors: list[str] = []
@@ -105,7 +118,7 @@ def _normalize_import_payload_shape(
 
 
 def _coerce_optional_object(
-    payload: dict[str, Any],
+    payload: ImportRootPayload,
     *,
     key: str,
     errors: list[str],
@@ -120,7 +133,9 @@ def _coerce_optional_object(
     return {}
 
 
-def _coerce_reviewed_files(payload: dict[str, Any], *, errors: list[str]) -> list[str]:
+def _coerce_reviewed_files(
+    payload: ImportRootPayload, *, errors: list[str]
+) -> list[str]:
     """Normalize reviewed_files to trimmed string list."""
     reviewed_files = payload.get("reviewed_files")
     if reviewed_files is None:
@@ -263,7 +278,9 @@ def _load_import_json(import_file: str) -> tuple[object | None, list[str]]:
         return None, [f"error reading issues: {exc}"]
 
 
-def _normalize_import_root_payload(raw_payload: object) -> tuple[dict[str, Any] | None, list[str]]:
+def _normalize_import_root_payload(
+    raw_payload: object,
+) -> tuple[ImportRootPayload | None, list[str]]:
     """Normalize top-level payload shape before strict field validation."""
     payload = {"issues": raw_payload} if isinstance(raw_payload, list) else raw_payload
     if not isinstance(payload, dict):

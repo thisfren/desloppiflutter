@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.intelligence.review.context import file_excerpt
 
 from .budget_analysis import (

@@ -5,7 +5,7 @@ from __future__ import annotations
 from ._constants import _history_strict
 
 
-def _compute_headline(
+def compute_headline(
     phase: str,
     dimensions: dict,
     debt: dict,
@@ -46,7 +46,6 @@ def _compute_headline(
         return None
     parts = security_prefix + (headline or "") + review_suffix
     return parts or None
-
 
 def _compute_headline_inner(
     phase: str,

@@ -9,6 +9,7 @@ from typing import Any
 from desloppify.base.enums import issue_status_tokens
 from desloppify.base.registry import DETECTORS
 from desloppify.engine._state.schema import StateModel
+from desloppify.engine._work_queue.types import WorkQueueItem
 
 ALL_STATUSES = set(issue_status_tokens(include_all=True))
 ACTION_TYPE_PRIORITY = {"auto_fix": 0, "refactor": 1, "manual_fix": 2, "reorganize": 3}
@@ -18,7 +19,7 @@ ATTEST_EXAMPLE = (
 )
 
 
-def detail_dict(item: dict[str, Any]) -> dict[str, Any]:
+def detail_dict(item: WorkQueueItem | dict[str, Any]) -> dict[str, Any]:
     """Return issue detail as a dict; tolerate legacy/non-dict payloads."""
     detail = item.get("detail")
     return detail if isinstance(detail, dict) else {}
@@ -28,7 +29,7 @@ def status_matches(item_status: str, status_filter: str) -> bool:
     return status_filter == "all" or item_status == status_filter
 
 
-def is_subjective_issue(item: dict[str, Any]) -> bool:
+def is_subjective_issue(item: WorkQueueItem | dict[str, Any]) -> bool:
     detector = item.get("detector")
     if detector in {"subjective_assessment"}:
         return True
@@ -37,11 +38,11 @@ def is_subjective_issue(item: dict[str, Any]) -> bool:
     return False
 
 
-def is_review_issue(item: dict[str, Any]) -> bool:
+def is_review_issue(item: WorkQueueItem | dict[str, Any]) -> bool:
     return item.get("detector") == "review"
 
 
-def is_subjective_queue_item(item: dict[str, Any]) -> bool:
+def is_subjective_queue_item(item: WorkQueueItem | dict[str, Any]) -> bool:
     """True for subjective work items, including collapsed subjective clusters."""
     if item.get("kind") == "subjective_dimension":
         return True
@@ -53,7 +54,7 @@ def is_subjective_queue_item(item: dict[str, Any]) -> bool:
     return False
 
 
-def review_issue_weight(item: dict[str, Any]) -> float:
+def review_issue_weight(item: WorkQueueItem | dict[str, Any]) -> float:
     """Return review issue weight aligned with issues list ordering."""
     confidence = str(item.get("confidence", "low")).lower()
     weight_by_confidence = {
@@ -67,7 +68,7 @@ def review_issue_weight(item: dict[str, Any]) -> float:
     return float(weight)
 
 
-def scope_matches(item: dict[str, Any], scope: str | None) -> bool:
+def scope_matches(item: WorkQueueItem | dict[str, Any], scope: str | None) -> bool:
     """Apply show-style pattern matching against a queue item."""
     if not scope:
         return True
@@ -112,29 +113,28 @@ def slugify(text: str) -> str:
 
 
 def supported_fixers_for_item(
-    state: StateModel, item: dict[str, Any]
+    state: StateModel, item: WorkQueueItem
 ) -> set[str] | None:
     """Return supported fixers for an item's language when known."""
     lang = str(item.get("lang", "") or "").strip()
     if not lang:
         return None
 
-    caps = state.get("lang_capabilities", {})
-    if not isinstance(caps, dict):
+    caps_obj = state.get("lang_capabilities")
+    if not isinstance(caps_obj, dict):
+        return None
+    lang_caps_obj = caps_obj.get(lang)
+    if not isinstance(lang_caps_obj, dict):
         return None
 
-    lang_caps = caps.get(lang, {})
-    if not isinstance(lang_caps, dict):
-        return None
-
-    fixers = lang_caps.get("fixers")
+    fixers = lang_caps_obj.get("fixers")
     if not isinstance(fixers, list):
         return None
     return {fixer for fixer in fixers if isinstance(fixer, str)}
 
 
 def primary_command_for_issue(
-    item: dict[str, Any], *, supported_fixers: set[str] | None = None
+    item: WorkQueueItem, *, supported_fixers: set[str] | None = None
 ) -> str:
     detector = item.get("detector", "")
     meta = DETECTORS.get(detector)

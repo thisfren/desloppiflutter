@@ -474,9 +474,9 @@ class TestBanditExcludeIntegration:
         fake_exclude_dirs = ["/project/src/.venv", "/project/src/__pycache__", "/project/src/vendor"]
         files = ["/project/src/app.py", "/project/src/utils.py"]
         with patch(
-            "desloppify.languages.python.detect_with_bandit", _fake_bandit
+            "desloppify.languages.python._security.detect_with_bandit", _fake_bandit
         ), patch(
-            "desloppify.languages.python.collect_exclude_dirs",
+            "desloppify.languages.python._security.collect_exclude_dirs",
             return_value=fake_exclude_dirs,
         ):
             config.detect_lang_security_detailed(files, zone_map=None)

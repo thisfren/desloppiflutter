@@ -45,7 +45,7 @@ from desloppify.base.discovery.source import (
     enable_file_cache,
     get_exclusions,
 )
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine import planning as plan_mod
 from desloppify.engine._work_queue.issues import expire_stale_holistic
 from desloppify.engine.planning.scan import PlanScanOptions

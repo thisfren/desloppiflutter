@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize, print_table
 from desloppify.engine.detectors.dupes import detect_duplicates
 from desloppify.engine.detectors.orphaned import (

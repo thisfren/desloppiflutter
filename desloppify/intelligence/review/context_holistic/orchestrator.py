@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from desloppify.base.discovery.api import (
+from desloppify.base.discovery.file_paths import rel
+
+from desloppify.base.discovery.source import (
+
     disable_file_cache,
+
     enable_file_cache,
+
     is_file_cache_enabled,
-    rel,
+
 )
 from desloppify.intelligence.review._context.models import HolisticContext
 from desloppify.intelligence.review._context.structure import (

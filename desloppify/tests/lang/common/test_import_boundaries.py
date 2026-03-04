@@ -36,7 +36,9 @@ def test_detectors_layer_does_not_import_lang_layer():
 
 def test_review_cmd_uses_split_modules():
     entrypoint_src = Path("desloppify/app/commands/review/cmd.py").read_text()
-    assert "from .batch.orchestrator import _do_run_batches" in entrypoint_src
+    assert "from .batch.orchestrator import" in entrypoint_src
+    assert "do_run_batches" in entrypoint_src
+    assert "do_import_run" in entrypoint_src
     assert "from .importing.cmd import do_import" in entrypoint_src
     assert "from .prepare import do_prepare" in entrypoint_src
     # registry imports uniformly from command package roots.

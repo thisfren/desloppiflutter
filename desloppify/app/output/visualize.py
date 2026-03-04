@@ -12,7 +12,11 @@ from typing import Any
 import desloppify.languages as lang_api
 from desloppify.app.output._viz_cmd_context import load_cmd_context
 from desloppify.app.output.tree_text import render_tree_lines
-from desloppify.base.discovery.api import find_source_files, rel, safe_write_text
+from desloppify.base.discovery.file_paths import (
+    rel,
+    safe_write_text,
+)
+from desloppify.base.discovery.source import find_source_files
 from desloppify.base.output.fallbacks import (
     log_best_effort_failure,
     print_write_error,

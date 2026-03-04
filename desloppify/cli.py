@@ -11,7 +11,7 @@ from desloppify.app.commands.helpers.runtime import CommandRuntime
 from desloppify.app.commands.helpers.state import state_path
 from desloppify.app.commands.registry import get_command_handlers
 from desloppify.base.config import load_config
-from desloppify.base.discovery.api import set_exclusions
+from desloppify.base.discovery.source import set_exclusions
 from desloppify.base.exception_sets import CommandError
 from desloppify.base.output.terminal import colorize
 from desloppify.base.discovery.paths import get_default_path, get_project_root

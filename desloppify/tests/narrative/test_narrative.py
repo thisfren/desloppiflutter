@@ -9,9 +9,9 @@ from desloppify.intelligence.narrative.core import (
     compute_narrative,
 )
 from desloppify.intelligence.narrative.dimensions import _analyze_debt
-from desloppify.intelligence.narrative.headline import _compute_headline
-from desloppify.intelligence.narrative.phase import _detect_milestone, _detect_phase
-from desloppify.intelligence.narrative.reminders import _compute_reminders
+from desloppify.intelligence.narrative.headline import compute_headline
+from desloppify.intelligence.narrative.phase import detect_milestone, detect_phase
+from desloppify.intelligence.narrative.reminders import compute_reminders
 from desloppify.intelligence.narrative.strategy_engine import (
     compute_fixer_leverage as _compute_fixer_leverage,
 )
@@ -183,17 +183,17 @@ class TestCountOpenByDetector:
 
 
 # ===================================================================
-# _detect_phase
+# detect_phase
 # ===================================================================
 
 
 class TestDetectPhase:
     def test_empty_history(self):
-        assert _detect_phase([], None) == "first_scan"
+        assert detect_phase([], None) == "first_scan"
 
     def test_single_entry_history(self):
         history = [_history_entry(strict_score=50.0)]
-        assert _detect_phase(history, 50.0) == "first_scan"
+        assert detect_phase(history, 50.0) == "first_scan"
 
     def test_regression_strict_dropped(self):
         """Strict dropped > 0.5 from previous scan."""
@@ -201,7 +201,7 @@ class TestDetectPhase:
             _history_entry(strict_score=80.0),
             _history_entry(strict_score=79.0),
         ]
-        assert _detect_phase(history, 79.0) == "regression"
+        assert detect_phase(history, 79.0) == "regression"
 
     def test_regression_exact_half_point_no_regression(self):
         """Dropping exactly 0.5 is NOT regression (must exceed 0.5)."""
@@ -209,7 +209,7 @@ class TestDetectPhase:
             _history_entry(strict_score=80.0),
             _history_entry(strict_score=79.5),
         ]
-        assert _detect_phase(history, 79.5) != "regression"
+        assert detect_phase(history, 79.5) != "regression"
 
     def test_stagnation_three_scans_unchanged(self):
         """Strict unchanged (spread <= 0.5) for 3+ scans."""
@@ -218,7 +218,7 @@ class TestDetectPhase:
             _history_entry(strict_score=75.2),
             _history_entry(strict_score=75.3),
         ]
-        assert _detect_phase(history, 75.3) == "stagnation"
+        assert detect_phase(history, 75.3) == "stagnation"
 
     def test_stagnation_requires_three_scans(self):
         """Only two scans with same score is not stagnation."""
@@ -230,7 +230,7 @@ class TestDetectPhase:
         # This should trigger early_momentum check (len 2, and first==last)
         # Since first == last (not last > first), it won't be early_momentum
         # Falls through to score thresholds
-        assert _detect_phase(history, 75.0) != "stagnation"
+        assert detect_phase(history, 75.0) != "stagnation"
 
     def test_early_momentum_scans_2_to_5_rising(self):
         """Scans 2-5, score rising from first to last."""
@@ -238,7 +238,7 @@ class TestDetectPhase:
             _history_entry(strict_score=60.0),
             _history_entry(strict_score=70.0),
         ]
-        assert _detect_phase(history, 70.0) == "early_momentum"
+        assert detect_phase(history, 70.0) == "early_momentum"
 
     def test_early_momentum_at_five_scans(self):
         history = [
@@ -248,7 +248,7 @@ class TestDetectPhase:
             _history_entry(strict_score=65.0),
             _history_entry(strict_score=70.0),
         ]
-        assert _detect_phase(history, 70.0) == "early_momentum"
+        assert detect_phase(history, 70.0) == "early_momentum"
 
     def test_early_momentum_not_at_six_scans(self):
         """More than 5 scans should not be early_momentum."""
@@ -261,7 +261,7 @@ class TestDetectPhase:
             _history_entry(strict_score=75.0),
         ]
         # len=6, not in 2-5 range, falls through
-        result = _detect_phase(history, 75.0)
+        result = detect_phase(history, 75.0)
         assert result != "early_momentum"
 
     def test_declining_trajectory_not_early_momentum(self):
@@ -272,7 +272,7 @@ class TestDetectPhase:
         ]
         # last (75) < first (80), so not early_momentum
         # Also triggers regression (80 - 75 = 5 > 0.5)
-        result = _detect_phase(history, 75.0)
+        result = detect_phase(history, 75.0)
         assert result != "early_momentum"
         assert result == "regression"
 
@@ -283,7 +283,7 @@ class TestDetectPhase:
             _history_entry(strict_score=70.0),
         ]
         # last == first, not >
-        result = _detect_phase(history, 70.0)
+        result = detect_phase(history, 70.0)
         assert result != "early_momentum"
 
     def test_maintenance_above_93(self):
@@ -296,7 +296,7 @@ class TestDetectPhase:
             _history_entry(strict_score=93.5),
             _history_entry(strict_score=94.0),
         ]
-        assert _detect_phase(history, 94.0) == "maintenance"
+        assert detect_phase(history, 94.0) == "maintenance"
 
     def test_refinement_above_80(self):
         """Score > 80 but <= 93 triggers refinement."""
@@ -308,7 +308,7 @@ class TestDetectPhase:
             _history_entry(strict_score=82.0),
             _history_entry(strict_score=85.0),
         ]
-        assert _detect_phase(history, 85.0) == "refinement"
+        assert detect_phase(history, 85.0) == "refinement"
 
     def test_middle_grind_below_80(self):
         """Score <= 80 with > 5 scans, no regression/stagnation."""
@@ -320,7 +320,7 @@ class TestDetectPhase:
             _history_entry(strict_score=60.0),
             _history_entry(strict_score=65.0),
         ]
-        assert _detect_phase(history, 65.0) == "middle_grind"
+        assert detect_phase(history, 65.0) == "middle_grind"
 
     def test_regression_takes_priority_over_stagnation(self):
         """Regression is checked before stagnation."""
@@ -331,7 +331,7 @@ class TestDetectPhase:
             _history_entry(strict_score=80.0),
             _history_entry(strict_score=79.0),
         ]
-        assert _detect_phase(history, 79.0) == "regression"
+        assert detect_phase(history, 79.0) == "regression"
 
     def test_stagnation_takes_priority_over_early_momentum(self):
         """Stagnation is checked before early_momentum for short histories."""
@@ -340,7 +340,7 @@ class TestDetectPhase:
             _history_entry(strict_score=70.0),
             _history_entry(strict_score=70.0),
         ]
-        assert _detect_phase(history, 70.0) == "stagnation"
+        assert detect_phase(history, 70.0) == "stagnation"
 
     def test_obj_strict_none_uses_last_history(self):
         """When obj_strict is None, fallback to history[-1].strict_score."""
@@ -354,7 +354,7 @@ class TestDetectPhase:
         ]
         # obj_strict None -> uses history[-1] = 75.0 -> refinement (> 80 would be, but 75 is not)
         # 75 <= 80 -> middle_grind
-        result = _detect_phase(history, None)
+        result = detect_phase(history, None)
         assert result == "middle_grind"
 
     def test_regression_with_none_strict_values(self):
@@ -363,7 +363,7 @@ class TestDetectPhase:
             _history_entry(),  # no strict_score
             _history_entry(strict_score=70.0),
         ]
-        result = _detect_phase(history, 70.0)
+        result = detect_phase(history, 70.0)
         # No prev strict to compare, regression check skipped
         # len=2, first has no strict -> early_momentum check: first is None -> skip
         # strict=70 -> not > 93, not > 80 -> middle_grind
@@ -371,7 +371,7 @@ class TestDetectPhase:
 
 
 # ===================================================================
-# _detect_milestone
+# detect_milestone
 # ===================================================================
 
 
@@ -382,7 +382,7 @@ class TestDetectMilestone:
             _history_entry(strict_score=89.0),
             _history_entry(strict_score=91.0),
         ]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "Crossed 90% strict!"
 
     def test_crossed_80_strict(self):
@@ -391,7 +391,7 @@ class TestDetectMilestone:
             _history_entry(strict_score=78.0),
             _history_entry(strict_score=82.0),
         ]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "Crossed 80% strict!"
 
     def test_crossed_90_takes_priority_over_80(self):
@@ -401,7 +401,7 @@ class TestDetectMilestone:
             _history_entry(strict_score=79.0),
             _history_entry(strict_score=91.0),
         ]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "Crossed 90% strict!"
 
     def test_already_above_90_no_milestone(self):
@@ -411,7 +411,7 @@ class TestDetectMilestone:
             _history_entry(strict_score=92.0),
             _history_entry(strict_score=95.0),
         ]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
     def test_all_t1_t2_cleared(self):
@@ -425,7 +425,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=70.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "All T1 and T2 items cleared!"
 
     def test_all_t1_cleared_with_t2_remaining(self):
@@ -439,7 +439,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=70.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "All T1 items cleared!"
 
     def test_t1_still_open_no_milestone(self):
@@ -453,7 +453,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=70.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
     def test_zero_open_issues(self):
@@ -466,7 +466,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=100.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result == "Zero open issues!"
 
     def test_zero_total_issues_no_milestone(self):
@@ -480,7 +480,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=100.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
     def test_no_milestone_ordinary_case(self):
@@ -496,14 +496,14 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=70.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
     def test_threshold_milestones_require_two_history_entries(self):
         """Single history entry cannot trigger 90/80 crossing."""
         state = {"strict_score": 95.0, "stats": {"by_tier": {}}}
         history = [_history_entry(strict_score=95.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
     def test_t1_t2_cleared_requires_prior_items(self):
@@ -518,7 +518,7 @@ class TestDetectMilestone:
             },
         }
         history = [_history_entry(strict_score=70.0)]
-        result = _detect_milestone(state, None, history)
+        result = detect_milestone(state, None, history)
         assert result is None
 
 
@@ -617,7 +617,7 @@ class TestAnalyzeDebt:
 
 
 # ===================================================================
-# _compute_reminders
+# compute_reminders
 # ===================================================================
 
 
@@ -625,7 +625,7 @@ class TestComputeReminders:
     def test_returns_tuple(self):
         """Must return (list, dict) tuple."""
         state = {"strict_score": 50.0}
-        result = _compute_reminders(
+        result = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -646,7 +646,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "reminder_history": {"rescan_needed": 3},
         }
-        reminders, history = _compute_reminders(
+        reminders, history = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -666,7 +666,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "reminder_history": {"rescan_needed": 2},
         }
-        reminders, history = _compute_reminders(
+        reminders, history = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -685,7 +685,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "reminder_history": {"rescan_needed": 1},
         }
-        reminders, updated = _compute_reminders(
+        reminders, updated = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -699,7 +699,7 @@ class TestComputeReminders:
 
     def test_rescan_reminder_after_fix(self):
         state = {"strict_score": 50.0}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -714,7 +714,7 @@ class TestComputeReminders:
 
     def test_rescan_reminder_after_resolve(self):
         state = {"strict_score": 50.0}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -729,7 +729,7 @@ class TestComputeReminders:
 
     def test_no_rescan_reminder_after_scan(self):
         state = {"strict_score": 50.0}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -747,7 +747,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "ignore_integrity": {"ignored": 12, "suppressed_pct": 42.0},
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {},
             [], {}, {}, "scan",
         )
@@ -759,7 +759,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "ignore_integrity": {"ignored": 2, "suppressed_pct": 12.0},
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {},
             [], {}, {}, "scan",
         )
@@ -769,7 +769,7 @@ class TestComputeReminders:
     def test_wontfix_growing_reminder(self):
         state = {"strict_score": 50.0}
         debt = {"trend": "growing"}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -785,7 +785,7 @@ class TestComputeReminders:
     def test_badge_recommendation_above_90(self):
         state = {"strict_score": 92.0}
         badge = {"generated": True, "in_readme": False}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "maintenance",
@@ -801,7 +801,7 @@ class TestComputeReminders:
     def test_no_badge_recommendation_below_90(self):
         state = {"strict_score": 85.0}
         badge = {"generated": True, "in_readme": False}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "refinement",
@@ -817,7 +817,7 @@ class TestComputeReminders:
     def test_no_badge_recommendation_already_in_readme(self):
         state = {"strict_score": 95.0}
         badge = {"generated": True, "in_readme": True}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "maintenance",
@@ -839,7 +839,7 @@ class TestComputeReminders:
                 "command": "desloppify autofix unused-imports --dry-run",
             }
         ]
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -862,7 +862,7 @@ class TestComputeReminders:
                 "command": "desloppify autofix unused-imports --dry-run",
             }
         ]
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "middle_grind",
@@ -882,7 +882,7 @@ class TestComputeReminders:
                 {"name": "Import hygiene", "strict": 80.0, "stuck_scans": 4},
             ],
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "stagnation",
@@ -904,7 +904,7 @@ class TestComputeReminders:
                 "command": "desloppify autofix unused-imports --dry-run",
             }
         ]
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -920,7 +920,7 @@ class TestComputeReminders:
     def test_reminders_include_metadata_and_rank_high_priority_first(self):
         state = {"strict_score": 50.0}
         actions = [{"type": "auto_fix", "count": 3, "command": "desloppify autofix unused-imports --dry-run"}]
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {"trend": "growing"},
             actions, {}, {}, "autofix",
         )
@@ -938,7 +938,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "reminder_history": original_history,
         }
-        _, updated = _compute_reminders(
+        _, updated = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -959,7 +959,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "scan_history": [{"strict_score": 45.0}, {"strict_score": 50.0}],
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "middle_grind",
@@ -980,7 +980,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "scan_history": [{"strict_score": 50.0}],
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "first_scan",
@@ -1000,7 +1000,7 @@ class TestComputeReminders:
             "scan_history": [{"strict_score": 45.0}, {"strict_score": 50.0}],
         }
         for cmd in ("autofix", "resolve", "show", "next", None):
-            reminders, _ = _compute_reminders(
+            reminders, _ = compute_reminders(
                 state,
                 "python",
                 "middle_grind",
@@ -1021,7 +1021,7 @@ class TestComputeReminders:
             "strict_score": 70.0,
             "scan_history": [{"strict_score": 70.0}] * 4,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "stagnation",
@@ -1049,7 +1049,7 @@ class TestComputeReminders:
             "scan_history": [{"strict_score": 45.0}, {"strict_score": 50.0}],
             "issues": issues,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "middle_grind",
@@ -1071,7 +1071,7 @@ class TestComputeReminders:
             "reminder_history": {"feedback_nudge": 3},
         }
         # Generic variant
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "middle_grind",
@@ -1083,7 +1083,7 @@ class TestComputeReminders:
         )
         assert not any(r["type"] == "feedback_nudge" for r in reminders)
         # Stagnation variant — still suppressed because same key
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "stagnation",
@@ -1101,7 +1101,7 @@ class TestComputeReminders:
             "strict_score": 50.0,
             "scan_history": [{"strict_score": 45.0}, {"strict_score": 50.0}],
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "python",
             "middle_grind",
@@ -1117,14 +1117,14 @@ class TestComputeReminders:
 
 
 # ===================================================================
-# _compute_headline
+# compute_headline
 # ===================================================================
 
 
 class TestComputeHeadline:
     def test_milestone_takes_priority(self):
         """If a milestone is set, it becomes the headline."""
-        result = _compute_headline(
+        result = compute_headline(
             phase="maintenance",
             dimensions={
                 "lowest_dimensions": [
@@ -1142,7 +1142,7 @@ class TestComputeHeadline:
         assert result == "Crossed 90% strict!"
 
     def test_first_scan_with_dimensions(self):
-        result = _compute_headline(
+        result = compute_headline(
             phase="first_scan",
             dimensions={
                 "lowest_dimensions": [
@@ -1165,7 +1165,7 @@ class TestComputeHeadline:
         assert "3 dimensions" in result
 
     def test_first_scan_no_dimensions(self):
-        result = _compute_headline(
+        result = compute_headline(
             phase="first_scan",
             dimensions={},
             debt={"overall_gap": 0},
@@ -1185,7 +1185,7 @@ class TestComputeHeadline:
             _history_entry(strict_score=80.0),
             _history_entry(strict_score=75.0),
         ]
-        result = _compute_headline(
+        result = compute_headline(
             phase="regression",
             dimensions={},
             debt={"overall_gap": 0},
@@ -1211,7 +1211,7 @@ class TestComputeHeadline:
                 {"name": "Organization", "failing": 10, "impact": 5.0, "strict": 60.0},
             ],
         }
-        result = _compute_headline(
+        result = compute_headline(
             phase="stagnation",
             dimensions=dimensions,
             debt={"overall_gap": 0, "wontfix_count": 0},
@@ -1238,7 +1238,7 @@ class TestComputeHeadline:
                 {"name": "Organization", "failing": 10, "impact": 5.0, "strict": 60.0},
             ],
         }
-        result = _compute_headline(
+        result = compute_headline(
             phase="stagnation",
             dimensions=dimensions,
             debt={"overall_gap": 3.0, "wontfix_count": 5},
@@ -1260,7 +1260,7 @@ class TestComputeHeadline:
                 {"name": "Import hygiene", "failing": 20, "impact": 8.5, "strict": 70.0},
             ],
         }
-        result = _compute_headline(
+        result = compute_headline(
             phase="refinement",
             dimensions=dimensions,
             debt={"overall_gap": 0},
@@ -1277,7 +1277,7 @@ class TestComputeHeadline:
         assert "+8.5 pts" in result
 
     def test_maintenance_headline(self):
-        result = _compute_headline(
+        result = compute_headline(
             phase="maintenance",
             dimensions={"lowest_dimensions": []},
             debt={"overall_gap": 0},
@@ -1303,7 +1303,7 @@ class TestComputeHeadline:
                 },
             ],
         }
-        result = _compute_headline(
+        result = compute_headline(
             phase="middle_grind",
             dimensions=dimensions,
             debt={"overall_gap": 0},
@@ -1320,7 +1320,7 @@ class TestComputeHeadline:
         assert "`desloppify next`" in result
 
     def test_early_momentum_headline(self):
-        result = _compute_headline(
+        result = compute_headline(
             phase="early_momentum",
             dimensions={"lowest_dimensions": []},
             debt={"overall_gap": 0},
@@ -1337,7 +1337,7 @@ class TestComputeHeadline:
 
     def test_returns_none_when_no_headline_matches(self):
         """Edge case: early_momentum with obj_strict None."""
-        result = _compute_headline(
+        result = compute_headline(
             phase="early_momentum",
             dimensions={"lowest_dimensions": []},
             debt={"overall_gap": 0},
@@ -1352,7 +1352,7 @@ class TestComputeHeadline:
 
     def test_gap_callout_headline(self):
         """Debt gap > 5 generates gap callout headline."""
-        result = _compute_headline(
+        result = compute_headline(
             phase="refinement",
             dimensions={"lowest_dimensions": []},
             debt={"overall_gap": 8.0, "worst_dimension": "Organization"},
@@ -1981,7 +1981,7 @@ class TestReviewHeadline:
     def test_review_suffix_in_middle_grind(self):
         """Review suffix should appear even during middle_grind (not just maintenance)."""
         by_det = {"unused": 5, "review": 3, "review_uninvestigated": 2}
-        headline = _compute_headline(
+        headline = compute_headline(
             "middle_grind",
             {"lowest_dimensions": []},
             {},
@@ -1999,7 +1999,7 @@ class TestReviewHeadline:
     def test_review_suffix_with_uninvestigated(self):
         """Uninvestigated review issues should mention show review."""
         by_det = {"review": 2, "review_uninvestigated": 2}
-        headline = _compute_headline(
+        headline = compute_headline(
             "maintenance",
             {},
             {},
@@ -2017,7 +2017,7 @@ class TestReviewHeadline:
     def test_review_suffix_all_investigated(self):
         """When all review issues are investigated, show 'pending' not 'issues'."""
         by_det = {"review": 2, "review_uninvestigated": 0}
-        headline = _compute_headline(
+        headline = compute_headline(
             "maintenance",
             {},
             {},
@@ -2035,7 +2035,7 @@ class TestReviewHeadline:
 
     def test_no_review_suffix_when_zero(self):
         by_det = {"unused": 3, "review": 0, "review_uninvestigated": 0}
-        headline = _compute_headline(
+        headline = compute_headline(
             "middle_grind",
             {"lowest_dimensions": []},
             {},
@@ -2096,7 +2096,7 @@ class TestReviewReminders:
 
     def test_review_issues_pending_reminder(self):
         state = self._base_state()
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "scan"
         )
         types = [r["type"] for r in reminders]
@@ -2108,7 +2108,7 @@ class TestReviewReminders:
     def test_no_review_pending_when_all_investigated(self):
         state = self._base_state()
         state["issues"]["r1"]["detail"]["investigation"] = "done too"
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "scan"
         )
         types = [r["type"] for r in reminders]
@@ -2117,7 +2117,7 @@ class TestReviewReminders:
     def test_rereview_needed_after_resolve(self):
         state = self._base_state()
         state["subjective_assessments"] = {"naming_quality": {"score": 70}}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "resolve"
         )
         types = [r["type"] for r in reminders]
@@ -2128,7 +2128,7 @@ class TestReviewReminders:
     def test_no_rereview_when_not_resolve_command(self):
         state = self._base_state()
         state["subjective_assessments"] = {"naming_quality": {"score": 70}}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "scan"
         )
         types = [r["type"] for r in reminders]
@@ -2136,7 +2136,7 @@ class TestReviewReminders:
 
     def test_no_rereview_without_assessments(self):
         state = self._base_state()
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "resolve"
         )
         types = [r["type"] for r in reminders]

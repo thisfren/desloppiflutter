@@ -10,6 +10,7 @@ __all__ = [
     "merge_scan",
 ]
 
+from desloppify.base.registry import DETECTORS
 from desloppify.engine._state.merge_history import (
     _append_scan_history,
     _build_merge_diff,
@@ -29,7 +30,22 @@ from desloppify.engine._state.schema import (
     utc_now,
     validate_state_invariants,
 )
-from desloppify.engine._state.scoring import _recompute_stats
+
+
+def _recompute_stats(
+    state: StateModel,
+    scan_path: str | None = None,
+    *,
+    subjective_integrity_target: float | None = None,
+) -> None:
+    """Local wrapper to avoid import-time cycles during state bootstrapping."""
+    from desloppify.engine._scoring.state_integration import recompute_stats
+
+    recompute_stats(
+        state,
+        scan_path=scan_path,
+        subjective_integrity_target=subjective_integrity_target,
+    )
 
 # Mechanical detectors → subjective dimensions they provide evidence for.
 # When issues from these detectors change during a scan, the corresponding
@@ -69,8 +85,20 @@ def _mark_stale_on_mechanical_change(
 
     affected_dims: set[str] = set()
     for detector in changed_detectors:
-        dims = _DETECTOR_SUBJECTIVE_DIMENSIONS.get(detector, ())
-        affected_dims.update(dims)
+        meta = DETECTORS.get(detector)
+        if meta is None or not meta.marks_dims_stale:
+            continue
+        dims = _DETECTOR_SUBJECTIVE_DIMENSIONS.get(detector)
+        if dims:
+            affected_dims.update(dims)
+            continue
+        # Safety fallback for newly added "marks_dims_stale" detectors that
+        # have not declared fine-grained dimension mappings yet.
+        affected_dims.update(
+            dim
+            for dim in assessments
+            if isinstance(dim, str) and dim.strip()
+        )
 
     if not affected_dims:
         return

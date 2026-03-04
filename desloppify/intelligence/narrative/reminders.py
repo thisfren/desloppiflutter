@@ -475,7 +475,7 @@ def _apply_decay(
     return filtered, updated_history
 
 
-def _compute_reminders(
+def compute_reminders(
     state: StateModel,
     lang: str | None,
     phase: str,

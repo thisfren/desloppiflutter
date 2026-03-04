@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.api import resolve_path
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.file_paths import resolve_path
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine.detectors.graph import finalize_graph
 from desloppify.languages.dart.extractors import find_dart_files
 from desloppify.languages.dart.pubspec import read_package_name

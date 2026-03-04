@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.discovery.paths import get_project_root
 from desloppify.base.output.fallbacks import log_best_effort_failure
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.text_utils import is_numeric
 
 
 def _rename_key(d: dict, old: str, new: str) -> bool:
@@ -27,8 +27,6 @@ def _default_config_file() -> Path:
     return get_project_root() / ".desloppify" / "config.json"
 
 
-# Legacy export for call sites/tests that introspect this module constant.
-CONFIG_FILE = _default_config_file()
 logger = logging.getLogger(__name__)
 MIN_TARGET_STRICT_SCORE = 0
 MAX_TARGET_STRICT_SCORE = 100

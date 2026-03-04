@@ -8,7 +8,6 @@ import desloppify.app.commands.resolve.persist as resolve_persist_mod
 import desloppify.app.commands.resolve.queue_guard as resolve_queue_guard_mod
 import desloppify.app.commands.resolve.render_support as resolve_render_support_mod
 import desloppify.app.commands.resolve.suppress as resolve_suppress_cmd_mod
-import desloppify.app.commands.review.importing.modes as review_importing_modes_mod
 import desloppify.app.commands.review.importing.output as review_import_output_mod
 import desloppify.app.commands.review.importing.parse as review_import_parse_mod
 import desloppify.app.commands.review.importing.policy as review_import_policy_mod
@@ -24,7 +23,7 @@ import desloppify.base.search.grep as grep_mod
 import desloppify.base.output.terminal as output_mod
 import desloppify.app.skill_docs as skill_docs_mod
 import desloppify.base.subjective_dimensions as subjective_dimensions_mod
-import desloppify.base.text.text_api as text_api_mod
+import desloppify.base.discovery.paths as paths_mod
 import desloppify.engine._plan.schema_migrations as schema_migrations_mod
 import desloppify.engine._scoring.results.health as scoring_health_mod
 import desloppify.engine._scoring.results.impact as scoring_impact_mod
@@ -55,7 +54,6 @@ def test_direct_coverage_priority_modules_smoke():
     assert callable(review_import_output_mod.print_import_load_errors)
     assert callable(review_import_parse_mod.load_import_issues_data)
     assert callable(review_import_policy_mod.apply_assessment_import_policy)
-    assert callable(review_importing_modes_mod.apply_review_import_mode)
 
     assert callable(scan_agent_context_mod.print_llm_summary)
     assert callable(scan_integrity_report_mod.show_score_integrity)
@@ -77,13 +75,13 @@ def test_direct_coverage_priority_modules_smoke():
     assert callable(output_mod.display_entries)
     assert callable(skill_docs_mod.check_skill_version)
     assert callable(subjective_dimensions_mod.default_dimension_keys)
-    assert callable(text_api_mod.read_code_snippet)
+    assert callable(paths_mod.read_code_snippet)
 
     assert callable(hook_registry_mod.register_lang_hooks)
     assert callable(schema_migrations_mod.migrate_v5_to_v6)
     assert callable(scoring_health_mod.compute_health_breakdown)
     assert callable(scoring_impact_mod.compute_score_impact)
-    assert callable(schema_scores_mod._get_verified_strict_score)
+    assert callable(schema_scores_mod.get_verified_strict_score)
     assert callable(work_queue_plan_order_mod.collapse_clusters)
     assert callable(planning_pkg.get_next_item)
     assert callable(planning_dimension_rows_mod.scorecard_dimension_rows)

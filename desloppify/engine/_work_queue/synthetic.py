@@ -6,11 +6,15 @@ subjective dimension items, and subjective score lookups.
 
 from __future__ import annotations
 
+from typing import Any
+
+from desloppify.engine._state.schema import StateModel
 from desloppify.engine._scoring.subjective.core import DISPLAY_NAMES
 from desloppify.engine._work_queue.helpers import (
     detail_dict,
     slugify,
 )
+from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.engine.planning.scorecard_projection import (
     all_subjective_entries,
 )
@@ -50,7 +54,7 @@ def _subjective_dimension_aliases(display_name: str) -> set[str]:
 # Subjective strict scores
 # ---------------------------------------------------------------------------
 
-def subjective_strict_scores(state: dict) -> dict[str, float]:
+def subjective_strict_scores(state: StateModel | dict[str, Any]) -> dict[str, float]:
     dim_scores = state.get("dimension_scores", {}) or {}
     if not dim_scores:
         return {}
@@ -81,7 +85,7 @@ def subjective_strict_scores(state: dict) -> dict[str, float]:
 # Synthetic item builders
 # ---------------------------------------------------------------------------
 
-def build_triage_stage_items(plan: dict, state: dict) -> list[dict]:
+def build_triage_stage_items(plan: dict, state: dict) -> list[WorkQueueItem]:
     """Build synthetic work items for each ``triage::*`` stage ID in the queue.
 
     Returns an empty list when no triage stages are pending.
@@ -114,7 +118,7 @@ def build_triage_stage_items(plan: dict, state: dict) -> list[dict]:
     label_map = dict(TRIAGE_STAGE_LABELS)
     stage_names = ("observe", "reflect", "organize", "commit")
 
-    items: list[dict] = []
+    items: list[WorkQueueItem] = []
     for idx, (sid, name) in enumerate(zip(TRIAGE_STAGE_IDS, stage_names, strict=False)):
         if sid not in present:
             continue
@@ -154,7 +158,7 @@ def build_triage_stage_items(plan: dict, state: dict) -> list[dict]:
     return items
 
 
-def build_score_checkpoint_item(plan: dict, state: dict) -> dict | None:
+def build_score_checkpoint_item(plan: dict, state: dict) -> WorkQueueItem | None:
     """Build a synthetic work item for ``workflow::score-checkpoint`` if it's in the queue.
 
     Returns ``None`` when the item is not pending.
@@ -191,7 +195,7 @@ def build_score_checkpoint_item(plan: dict, state: dict) -> dict | None:
     }
 
 
-def build_create_plan_item(plan: dict) -> dict | None:
+def build_create_plan_item(plan: dict) -> WorkQueueItem | None:
     """Build a synthetic work item for ``workflow::create-plan`` if it's in the queue.
 
     Returns ``None`` when the item is not pending.
@@ -218,7 +222,7 @@ def build_create_plan_item(plan: dict) -> dict | None:
 
 def build_subjective_items(
     state: dict, issues: dict, *, threshold: float = 100.0
-) -> list[dict]:
+) -> list[WorkQueueItem]:
     """Create synthetic subjective work items."""
     dim_scores = state.get("dimension_scores", {}) or {}
     if not dim_scores:
@@ -245,7 +249,7 @@ def build_subjective_items(
             continue
         review_open_by_dim[dim_key] = review_open_by_dim.get(dim_key, 0) + 1
 
-    items: list[dict] = []
+    items: list[WorkQueueItem] = []
     def _prepare_command(
         cli_keys: list[str],
         *,
@@ -314,7 +318,7 @@ def build_subjective_items(
     return items
 
 
-def build_import_scores_item(plan: dict, state: dict) -> dict | None:
+def build_import_scores_item(plan: dict, state: dict) -> WorkQueueItem | None:
     """Build a synthetic work item for ``workflow::import-scores`` if it's in the queue.
 
     Returns ``None`` when the item is not pending.
@@ -348,7 +352,7 @@ def build_import_scores_item(plan: dict, state: dict) -> dict | None:
     }
 
 
-def build_communicate_score_item(plan: dict, state: dict) -> dict | None:
+def build_communicate_score_item(plan: dict, state: dict) -> WorkQueueItem | None:
     """Build a synthetic work item for ``workflow::communicate-score`` if it's in the queue.
 
     Returns ``None`` when the item is not pending.

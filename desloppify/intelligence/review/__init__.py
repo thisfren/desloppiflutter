@@ -7,6 +7,8 @@ imported back into state like any other detector.
 No LLM calls happen here — this module is pure Python.
 """
 
+from typing import Any
+
 from desloppify.intelligence.integrity import (
     is_holistic_subjective_issue,
     is_subjective_review_open,
@@ -27,12 +29,6 @@ from desloppify.intelligence.review.dimensions.lang import (
     get_lang_guidance,
 )
 from desloppify.intelligence.review.dimensions.selection import resolve_dimensions
-from desloppify.intelligence.review.importing.holistic import (
-    import_holistic_issues,
-)
-from desloppify.intelligence.review.importing.per_file import (
-    import_review_issues,
-)
 from desloppify.intelligence.review.policy import (
     DimensionPolicy,
     append_custom_dimensions,
@@ -56,6 +52,24 @@ from desloppify.intelligence.review.selection import (
     is_low_value_file,
     select_files_for_review,
 )
+
+
+def import_review_issues(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Lazy wrapper to avoid import cycles during package initialization."""
+    from desloppify.intelligence.review.importing.per_file import (
+        import_review_issues as _import_review_issues,
+    )
+
+    return _import_review_issues(*args, **kwargs)
+
+
+def import_holistic_issues(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Lazy wrapper to avoid import cycles during package initialization."""
+    from desloppify.intelligence.review.importing.holistic import (
+        import_holistic_issues as _import_holistic_issues,
+    )
+
+    return _import_holistic_issues(*args, **kwargs)
 
 __all__ = [
     # dimensions

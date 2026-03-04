@@ -18,7 +18,7 @@ from desloppify.app.commands.resolve.selection import (
     validate_attestation,
     validate_note_length,
 )
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
 from desloppify.base.output.terminal import colorize
 from desloppify.engine._plan.skip_policy import (

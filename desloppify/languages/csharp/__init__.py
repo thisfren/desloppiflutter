@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from desloppify.base.text.text_api import get_area
-from desloppify.engine.detectors.base import FunctionInfo
-from desloppify.engine.policy.zones import COMMON_ZONE_RULES, Zone, ZoneRule
+from desloppify.base.discovery.paths import get_area
 from desloppify.engine.hook_registry import register_lang_hooks
+from desloppify.engine.policy.zones import COMMON_ZONE_RULES, Zone, ZoneRule
 from desloppify.languages import register_lang
 from desloppify.languages._framework.base.phase_builders import (
     detector_phase_security,
@@ -22,75 +19,25 @@ from desloppify.languages._framework.base.types import (
     LangValueSpec,
 )
 from desloppify.languages._framework.treesitter.phases import all_treesitter_phases
-from desloppify.languages.csharp import move as csharp_move_helpers
 from desloppify.languages.csharp import test_coverage as csharp_test_coverage_hooks
+from desloppify.languages.csharp._helpers import extract_all_csharp_functions
+from desloppify.languages.csharp._review import (
+    CSHARP_HOLISTIC_REVIEW_DIMENSIONS,
+    CSHARP_LOW_VALUE_PATTERN,
+    CSHARP_MIGRATION_MIXED_EXTENSIONS,
+    CSHARP_MIGRATION_PATTERN_PAIRS,
+    CSHARP_REVIEW_GUIDANCE,
+    csharp_review_api_surface,
+    csharp_review_module_patterns,
+)
+from desloppify.languages.csharp._zones import CSHARP_ENTRY_PATTERNS, CSHARP_ZONE_RULES
 from desloppify.languages.csharp.commands import get_detect_commands
 from desloppify.languages.csharp.detectors.deps import (
     build_dep_graph as build_csharp_dep_graph,
 )
 from desloppify.languages.csharp.detectors.security import detect_csharp_security
-from desloppify.languages.csharp.extractors import (
-    CSHARP_FILE_EXCLUSIONS,
-    extract_csharp_functions,
-    find_csharp_files,
-)
+from desloppify.languages.csharp.extractors import CSHARP_FILE_EXCLUSIONS, find_csharp_files
 from desloppify.languages.csharp.phases import phase_coupling, phase_structural
-from desloppify.languages.csharp.review import (
-    HOLISTIC_REVIEW_DIMENSIONS as CSHARP_HOLISTIC_REVIEW_DIMENSIONS,
-)
-from desloppify.languages.csharp.review import (
-    LOW_VALUE_PATTERN as CSHARP_LOW_VALUE_PATTERN,
-)
-from desloppify.languages.csharp.review import (
-    MIGRATION_MIXED_EXTENSIONS as CSHARP_MIGRATION_MIXED_EXTENSIONS,
-)
-from desloppify.languages.csharp.review import (
-    MIGRATION_PATTERN_PAIRS as CSHARP_MIGRATION_PATTERN_PAIRS,
-)
-from desloppify.languages.csharp.review import REVIEW_GUIDANCE as CSHARP_REVIEW_GUIDANCE
-from desloppify.languages.csharp.review import api_surface as csharp_review_api_surface
-from desloppify.languages.csharp.review import (
-    module_patterns as csharp_review_module_patterns,
-)
-
-_CSHARP_MOVE_HELPERS = (
-    csharp_move_helpers.find_replacements,
-    csharp_move_helpers.find_self_replacements,
-    csharp_move_helpers.filter_intra_package_importer_changes,
-    csharp_move_helpers.filter_directory_self_changes,
-)
-
-
-def _extract_csharp_functions(path: Path) -> list[FunctionInfo]:
-    """Extract all C# functions for duplicate detection."""
-    functions = []
-    for filepath in find_csharp_files(path):
-        functions.extend(extract_csharp_functions(filepath))
-    return functions
-
-
-CSHARP_ENTRY_PATTERNS = [
-    "/Program.cs",
-    "/Startup.cs",
-    "/Main.cs",
-    "/MauiProgram.cs",
-    "/MainActivity.cs",
-    "/AppDelegate.cs",
-    "/SceneDelegate.cs",
-    "/WinUIApplication.cs",
-    "/App.xaml.cs",
-    "/Properties/",
-    "/Migrations/",
-    ".g.cs",
-    ".designer.cs",
-]
-
-CSHARP_ZONE_RULES = [
-    ZoneRule(Zone.GENERATED, [".g.cs", ".designer.cs", "/obj/", "/bin/"]),
-    ZoneRule(Zone.TEST, [".Tests.cs", "Tests.cs", "Test.cs", "/Tests/", "/test/"]),
-    ZoneRule(Zone.CONFIG, ["/Program.cs", "/Startup.cs", "/AssemblyInfo.cs"]),
-] + COMMON_ZONE_RULES
-
 
 register_lang_hooks("csharp", test_coverage=csharp_test_coverage_hooks)
 
@@ -160,46 +107,21 @@ class CSharpConfig(LangConfig):
             holistic_review_dimensions=CSHARP_HOLISTIC_REVIEW_DIMENSIONS,
             migration_pattern_pairs=CSHARP_MIGRATION_PATTERN_PAIRS,
             migration_mixed_extensions=CSHARP_MIGRATION_MIXED_EXTENSIONS,
-            extract_functions=_extract_csharp_functions,
+            extract_functions=extract_all_csharp_functions,
             zone_rules=CSHARP_ZONE_RULES,
         )
 
+
 __all__ = [
-    "Path",
-    "get_area",
-    "FunctionInfo",
     "COMMON_ZONE_RULES",
-    "Zone",
-    "ZoneRule",
-    "register_lang_hooks",
-    "register_lang",
-    "detector_phase_security",
-    "detector_phase_signature",
-    "detector_phase_test_coverage",
-    "shared_subjective_duplicates_tail",
-    "DetectorPhase",
-    "LangConfig",
-    "LangSecurityResult",
-    "LangValueSpec",
-    "all_treesitter_phases",
-    "csharp_move_helpers",
-    "csharp_test_coverage_hooks",
-    "get_detect_commands",
-    "build_csharp_dep_graph",
-    "detect_csharp_security",
-    "CSHARP_FILE_EXCLUSIONS",
-    "extract_csharp_functions",
-    "find_csharp_files",
-    "phase_coupling",
-    "phase_structural",
+    "CSHARP_ENTRY_PATTERNS",
     "CSHARP_HOLISTIC_REVIEW_DIMENSIONS",
     "CSHARP_LOW_VALUE_PATTERN",
     "CSHARP_MIGRATION_MIXED_EXTENSIONS",
     "CSHARP_MIGRATION_PATTERN_PAIRS",
     "CSHARP_REVIEW_GUIDANCE",
-    "csharp_review_api_surface",
-    "csharp_review_module_patterns",
-    "CSHARP_ENTRY_PATTERNS",
     "CSHARP_ZONE_RULES",
     "CSharpConfig",
+    "Zone",
+    "ZoneRule",
 ]

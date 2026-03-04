@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from desloppify.base.enums import Confidence, Tier
+from desloppify.base.registry import DETECTORS
 from desloppify.base.scoring_constants import (
     CONFIDENCE_WEIGHTS,
     HOLISTIC_MULTIPLIER,
@@ -35,63 +36,61 @@ class DetectorScoringPolicy:
 
 # Security issues are excluded in non-production zones.
 SECURITY_EXCLUDED_ZONES = frozenset({"test", "config", "generated", "vendor"})
+_DEFAULT_EXCLUDED_ZONES = frozenset(EXCLUDED_ZONE_VALUES)
 
-# Central scoring policy for each detector: dimension/tier assignment,
-# weighting mode, and zone exclusions.
-DETECTOR_SCORING_POLICIES: dict[str, DetectorScoringPolicy] = {
-    # File health
-    "structural": DetectorScoringPolicy("structural", "File health", 3),
-    # Code quality
-    "unused": DetectorScoringPolicy("unused", "Code quality", 3),
-    "logs": DetectorScoringPolicy("logs", "Code quality", 3),
-    "exports": DetectorScoringPolicy("exports", "Code quality", 3),
-    "deprecated": DetectorScoringPolicy("deprecated", "Code quality", 3),
-    "props": DetectorScoringPolicy("props", "Code quality", 3),
-    "smells": DetectorScoringPolicy("smells", "Code quality", 3, file_based=True),
-    "react": DetectorScoringPolicy("react", "Code quality", 3),
-    "dict_keys": DetectorScoringPolicy("dict_keys", "Code quality", 3, file_based=True),
-    "global_mutable_config": DetectorScoringPolicy(
-        "global_mutable_config", "Code quality", 3
-    ),
-    "orphaned": DetectorScoringPolicy("orphaned", "Code quality", 3),
-    "flat_dirs": DetectorScoringPolicy("flat_dirs", "Code quality", 3),
-    "naming": DetectorScoringPolicy("naming", "Code quality", 3),
-    "facade": DetectorScoringPolicy("facade", "Code quality", 3),
-    "stale_exclude": DetectorScoringPolicy("stale_exclude", "Code quality", 3),
-    "patterns": DetectorScoringPolicy("patterns", "Code quality", 3),
-    "single_use": DetectorScoringPolicy("single_use", "Code quality", 3),
-    "coupling": DetectorScoringPolicy("coupling", "Code quality", 3),
-    "responsibility_cohesion": DetectorScoringPolicy(
-        "responsibility_cohesion", "Code quality", 3
-    ),
-    "private_imports": DetectorScoringPolicy("private_imports", "Code quality", 3),
-    "layer_violation": DetectorScoringPolicy("layer_violation", "Code quality", 3),
-    # Duplication
-    "dupes": DetectorScoringPolicy("dupes", "Duplication", 3),
-    "boilerplate_duplication": DetectorScoringPolicy(
-        "boilerplate_duplication", "Duplication", 3
-    ),
-    # Test health
-    "test_coverage": DetectorScoringPolicy(
-        "test_coverage", "Test health", 4, file_based=True, use_loc_weight=True
-    ),
-    "subjective_review": DetectorScoringPolicy(
-        "subjective_review", "Test health", 4, file_based=True
-    ),
-    # Security
-    "security": DetectorScoringPolicy(
-        "security",
-        "Security",
-        4,
-        file_based=True,
-        excluded_zones=SECURITY_EXCLUDED_ZONES,
-    ),
-    "cycles": DetectorScoringPolicy("cycles", "Security", 4),
-    # Design coherence (concerns confirmed by subjective review)
-    "concerns": DetectorScoringPolicy("concerns", None, None, file_based=True),
-    # Review issues are scored via subjective dimensions, not mechanical dimensions.
-    "review": DetectorScoringPolicy("review", None, None, file_based=True),
+# Non-objective detectors are tracked in state/queue but excluded from
+# mechanical dimension scoring.
+_NON_OBJECTIVE_DETECTORS = frozenset(
+    {
+        "concerns",
+        "review",
+        "uncalled_functions",
+        "unused_enums",
+        "signature",
+        "stale_wontfix",
+    }
+)
+
+# Keep policy details that are independent of tier/dimension wiring.
+_FILE_BASED_POLICY_DETECTORS = frozenset(
+    {"smells", "dict_keys", "test_coverage", "subjective_review", "security", "concerns", "review"}
+)
+_LOC_WEIGHT_POLICY_DETECTORS = frozenset({"test_coverage"})
+_EXCLUDED_ZONE_OVERRIDES: dict[str, frozenset[str]] = {
+    "security": SECURITY_EXCLUDED_ZONES,
 }
+
+
+def _build_builtin_detector_scoring_policies() -> dict[str, DetectorScoringPolicy]:
+    """Build baseline scoring policies from DetectorMeta plus policy overrides."""
+    policies: dict[str, DetectorScoringPolicy] = {}
+    for detector, meta in DETECTORS.items():
+        if detector in _NON_OBJECTIVE_DETECTORS:
+            dimension: str | None = None
+            tier: int | None = None
+        else:
+            dimension = meta.dimension
+            tier = meta.tier
+
+        policies[detector] = DetectorScoringPolicy(
+            detector=detector,
+            dimension=dimension,
+            tier=tier,
+            file_based=detector in _FILE_BASED_POLICY_DETECTORS,
+            use_loc_weight=detector in _LOC_WEIGHT_POLICY_DETECTORS,
+            excluded_zones=_EXCLUDED_ZONE_OVERRIDES.get(
+                detector,
+                _DEFAULT_EXCLUDED_ZONES,
+            ),
+        )
+    return policies
+
+
+# Central scoring policy for each detector: tier/dimension come from registry,
+# while file-based and zone behavior are preserved via local overrides.
+DETECTOR_SCORING_POLICIES: dict[str, DetectorScoringPolicy] = (
+    _build_builtin_detector_scoring_policies()
+)
 _BASE_DETECTOR_SCORING_POLICIES: dict[str, DetectorScoringPolicy] = dict(
     DETECTOR_SCORING_POLICIES
 )

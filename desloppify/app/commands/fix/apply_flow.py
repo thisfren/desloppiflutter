@@ -14,7 +14,7 @@ from desloppify.app.commands.helpers.query import write_query
 from desloppify.app.commands.helpers.queue_progress import show_score_with_plan_context
 from desloppify.app.commands.helpers.runtime import command_runtime
 from desloppify.app.commands.helpers.state import state_path
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize
 from desloppify.intelligence import narrative as narrative_mod
 from desloppify.languages._framework.base.types import FixResult

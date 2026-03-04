@@ -245,7 +245,7 @@ def generic_lang(
             from desloppify.languages._framework.treesitter._extractors import (
                 make_ts_extractor,
             )
-            from desloppify.languages._framework.treesitter._imports import (
+            from desloppify.languages._framework.treesitter._import_graph import (
                 make_ts_dep_builder,
             )
 

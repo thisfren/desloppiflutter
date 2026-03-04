@@ -22,7 +22,7 @@ from desloppify.app.commands.plan.queue_render import cmd_plan_queue
 from desloppify.app.commands.plan.reorder_handlers import cmd_plan_reorder
 from desloppify.app.commands.plan.triage_handlers import cmd_plan_triage
 from desloppify.base.config import load_config
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.output.fallbacks import warn_best_effort
 from desloppify.base.output.terminal import colorize
 from desloppify.base.tooling import check_config_staleness

@@ -15,7 +15,7 @@ from desloppify.base.discovery.source import (
     find_source_files,
     find_ts_files,
 )
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine.detectors.graph import (
     detect_cycles,
     finalize_graph,

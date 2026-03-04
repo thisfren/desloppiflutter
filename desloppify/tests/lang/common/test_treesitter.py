@@ -354,11 +354,11 @@ class TestGoImportResolver:
 
     def test_local_import_resolves(self, tmp_path):
         from desloppify.languages._framework.treesitter._imports import (
-            _GO_MODULE_CACHE,
+            reset_import_cache,
             resolve_go_import,
         )
 
-        _GO_MODULE_CACHE.clear()
+        reset_import_cache()
 
         # Create go.mod and a package directory.
         (tmp_path / "go.mod").write_text("module example.com/myproject\n")
@@ -373,7 +373,7 @@ class TestGoImportResolver:
         )
         assert result is not None
         assert result.endswith("utils.go")
-        _GO_MODULE_CACHE.clear()
+        reset_import_cache()
 
 
 class TestRustImportResolver:
@@ -455,12 +455,12 @@ class TestCxxIncludeResolver:
 class TestDepGraphBuilder:
     def test_go_dep_graph(self, tmp_path):
         from desloppify.languages._framework.treesitter._imports import (
-            _GO_MODULE_CACHE,
+            reset_import_cache,
             ts_build_dep_graph,
         )
         from desloppify.languages._framework.treesitter._specs import GO_SPEC
 
-        _GO_MODULE_CACHE.clear()
+        reset_import_cache()
 
         (tmp_path / "go.mod").write_text("module example.com/test\n")
         pkg_dir = tmp_path / "pkg"
@@ -478,7 +478,7 @@ class TestDepGraphBuilder:
         # main.go should import pkg.go
         main_imports = graph[str(main_file)]["imports"]
         assert str(pkg_file) in main_imports
-        _GO_MODULE_CACHE.clear()
+        reset_import_cache()
 
     def test_no_import_query_returns_empty(self, tmp_path):
         from desloppify.languages._framework.treesitter._imports import (

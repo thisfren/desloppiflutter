@@ -9,7 +9,7 @@ from pathlib import Path
 
 from desloppify.app.commands.helpers.query import write_query_best_effort
 from desloppify.base.coercions import coerce_positive_int
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.exception_sets import CommandError, PacketValidationError
 from desloppify.base.output.terminal import colorize, log
 from desloppify.intelligence import narrative as narrative_mod
@@ -177,7 +177,7 @@ def _load_or_prepare_packet(
     return packet, packet_path, blind_saved
 
 
-def _do_run_batches(args, state, lang, state_file, config: dict | None = None) -> None:
+def do_run_batches(args, state, lang, state_file, config: dict | None = None) -> None:
     """Run holistic investigation batches with a local subagent runner."""
     from ..runtime.policy import resolve_batch_run_policy
 
@@ -281,7 +281,6 @@ def _do_run_batches(args, state, lang, state_file, config: dict | None = None) -
         project_root=runtime_project_root,
         subagent_runs_dir=_subagent_runs_dir(),
     )
-
 
 def _validate_run_dir(run_dir: Path) -> tuple[dict, Path, str]:
     """Validate run directory, load summary, and return (summary, blind_packet_path, immutable_packet_path).

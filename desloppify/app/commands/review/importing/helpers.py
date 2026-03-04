@@ -205,7 +205,10 @@ def _parse_and_validate_import(
     )
     if shape_errors:
         return None, shape_errors
-    assert normalized_issues_data is not None
+    if normalized_issues_data is None:
+        raise ValueError(
+            "normalized import payload missing after successful shape validation"
+        )
 
     override_enabled, override_attest = resolve_override_context(
         manual_override=options.manual_override,
@@ -237,7 +240,10 @@ def _parse_and_validate_import(
     )
     if policy_errors:
         return None, policy_errors
-    assert issues_data is not None
+    if issues_data is None:
+        raise ValueError(
+            "assessment import policy returned no payload without reporting errors"
+        )
 
     missing_feedback, missing_low_score_issues = _validate_assessment_feedback(
         issues_data
@@ -318,7 +324,10 @@ def load_import_issues_data(
     )
     if errors:
         raise ImportPayloadLoadError(errors)
-    assert data is not None  # guaranteed when errors is empty
+    if data is None:
+        raise ValueError(
+            "import payload missing after parse completed without validation errors"
+        )
     return data
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 from desloppify.intelligence.review.feedback_contract import (
     DIMENSION_NOTE_ISSUES_KEY,
@@ -32,6 +32,42 @@ from .scoring import DimensionMergeScorer
 _DIMENSION_SCORER = DimensionMergeScorer()
 
 
+class BatchIssuePayload(ReviewIssuePayload, total=False):
+    """Normalized issue payload passed across batch merge/import seams."""
+
+    impact_scope: str
+    fix_scope: str
+
+
+class BatchDimensionNotePayload(TypedDict, total=False):
+    """Normalized per-dimension evidence and scoring context."""
+
+    evidence: list[str]
+    impact_scope: str
+    fix_scope: str
+    confidence: str
+    issues_preventing_higher_score: str
+    sub_axes: dict[str, float]
+
+
+class BatchQualityPayload(TypedDict, total=False):
+    """Quality telemetry attached to each normalized batch output."""
+
+    dimension_coverage: float
+    evidence_density: float
+    high_score_missing_issue_note: float
+    high_score_without_risk: NotRequired[float]
+
+
+class BatchResultPayload(TypedDict):
+    """Canonical normalized batch payload consumed by merge routines."""
+
+    assessments: dict[str, float]
+    issues: list[BatchIssuePayload]
+    dimension_notes: dict[str, BatchDimensionNotePayload]
+    quality: BatchQualityPayload
+
+
 @dataclass(frozen=True)
 class NormalizedBatchIssue:
     """Typed internal issue contract for normalized batch payloads."""
@@ -48,8 +84,8 @@ class NormalizedBatchIssue:
     reasoning: str = ""
     evidence_lines: list[int] | None = None
 
-    def to_payload(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+    def to_payload(self) -> BatchIssuePayload:
+        payload: BatchIssuePayload = {
             "dimension": self.dimension,
             "identifier": self.identifier,
             "summary": self.summary,
@@ -191,7 +227,7 @@ def _normalize_abstraction_sub_axes(
 
 def _normalize_issues(
     raw_issues: object,
-    dimension_notes: dict[str, dict[str, Any]],
+    dimension_notes: dict[str, BatchDimensionNotePayload],
     *,
     max_batch_issues: int,
     allowed_dims: set[str],
@@ -214,7 +250,10 @@ def _normalize_issues(
         if issue_errors:
             errors.extend(issue_errors)
             continue
-        assert issue is not None
+        if issue is None:
+            raise ValueError(
+                "batch issue payload missing after validation succeeded"
+            )
 
         dim = issue["dimension"]
         note = dimension_notes.get(dim, {})
@@ -321,10 +360,10 @@ def _enforce_low_score_issues(
 def _compute_batch_quality(
     assessments: dict[str, float],
     issues: list[NormalizedBatchIssue],
-    dimension_notes: dict[str, dict[str, Any]],
+    dimension_notes: dict[str, BatchDimensionNotePayload],
     allowed_dims: set[str],
     high_score_missing_issue_note: float,
-) -> dict[str, float]:
+) -> BatchQualityPayload:
     """Compute quality metrics for a single batch result."""
     return {
         "dimension_coverage": round(
@@ -348,9 +387,9 @@ def normalize_batch_result(
     abstraction_sub_axes: tuple[str, ...],
 ) -> tuple[
     dict[str, float],
-    list[dict[str, Any]],
-    dict[str, dict[str, Any]],
-    dict[str, float],
+    list[BatchIssuePayload],
+    dict[str, BatchDimensionNotePayload],
+    BatchQualityPayload,
 ]:
     """Validate and normalize one batch payload."""
     if "assessments" not in payload:
@@ -370,7 +409,7 @@ def normalize_batch_result(
         raise ValueError("dimension_notes must be an object")
 
     assessments: dict[str, float] = {}
-    dimension_notes: dict[str, dict[str, Any]] = {}
+    dimension_notes: dict[str, BatchDimensionNotePayload] = {}
     high_score_missing_issue_note = 0.0
     for key, value in raw_assessments.items():
         if not isinstance(key, str) or not key:
@@ -387,12 +426,15 @@ def normalize_batch_result(
         evidence, impact_scope, fix_scope, confidence, issues_note = (
             _validate_dimension_note(key, note_raw)
         )
-        assert isinstance(note_raw, dict)
+        if not isinstance(note_raw, dict):
+            raise ValueError(
+                f"dimension_notes missing object for assessed dimension: {key}"
+            )
         if score > HIGH_SCORE_ISSUES_NOTE_THRESHOLD and not issues_note:
             high_score_missing_issue_note += 1
 
         normalized_sub_axes: dict[str, float] = {}
-        if key == "abstraction_fitness" and isinstance(note_raw, dict):
+        if key == "abstraction_fitness":
             normalized_sub_axes = _normalize_abstraction_sub_axes(
                 note_raw, abstraction_sub_axes
             )
@@ -435,8 +477,8 @@ def normalize_batch_result(
 def assessment_weight(
     *,
     dimension: str,
-    issues: list[dict[str, Any]],
-    dimension_notes: dict[str, dict[str, Any]],
+    issues: list[BatchIssuePayload],
+    dimension_notes: dict[str, BatchDimensionNotePayload],
 ) -> float:
     """Evidence-weighted assessment score weight with a neutral floor.
 
@@ -454,9 +496,9 @@ def assessment_weight(
 
 
 def _issue_pressure_by_dimension(
-    issues: list[dict[str, Any]],
+    issues: list[BatchIssuePayload],
     *,
-    dimension_notes: dict[str, dict[str, Any]],
+    dimension_notes: dict[str, BatchDimensionNotePayload],
 ) -> tuple[dict[str, float], dict[str, int]]:
     """Summarize how strongly issues should pull dimension scores down."""
     return _DIMENSION_SCORER.issue_pressure_by_dimension(
@@ -466,11 +508,11 @@ def _issue_pressure_by_dimension(
 
 
 def _accumulate_batch_scores(
-    result: dict[str, Any],
+    result: BatchResultPayload,
     *,
     score_buckets: dict[str, list[tuple[float, float]]],
     score_raw_by_dim: dict[str, list[float]],
-    merged_dimension_notes: dict[str, dict[str, Any]],
+    merged_dimension_notes: dict[str, BatchDimensionNotePayload],
     abstraction_axis_scores: dict[str, list[tuple[float, float]]],
     abstraction_sub_axes: tuple[str, ...],
 ) -> None:
@@ -514,7 +556,7 @@ def _accumulate_batch_scores(
                     )
 
 
-def _issue_identity_key(issue: dict[str, Any]) -> str:
+def _issue_identity_key(issue: BatchIssuePayload) -> str:
     """Build a stable concept key; prefer dimension+identifier when available."""
     dim = str(issue.get("dimension", "")).strip()
     ident = str(issue.get("identifier", "")).strip()
@@ -527,7 +569,9 @@ def _issue_identity_key(issue: dict[str, Any]) -> str:
     return f"{dim}::{summary}"
 
 
-def _merge_issue_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+def _merge_issue_payload(
+    existing: BatchIssuePayload, incoming: BatchIssuePayload
+) -> None:
     """Merge two concept-equivalent issues into the existing payload."""
     merge_list_fields(existing, incoming, ("related_files", "evidence"))
     # Prefer richer summary/suggestion text when they differ.
@@ -536,7 +580,9 @@ def _merge_issue_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> 
     track_merged_from(existing, str(incoming.get("identifier", "")).strip())
 
 
-def _should_merge_issues(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+def _should_merge_issues(
+    existing: BatchIssuePayload, incoming: BatchIssuePayload
+) -> bool:
     """Check whether two key-matched issues are similar enough to merge."""
     existing_summary = normalize_word_set(str(existing.get("summary", "")))
     incoming_summary = normalize_word_set(str(incoming.get("summary", "")))
@@ -555,7 +601,7 @@ def _should_merge_issues(existing: dict[str, Any], incoming: dict[str, Any]) -> 
 
 
 def _accumulate_batch_quality(
-    result: dict[str, Any],
+    result: BatchResultPayload,
     *,
     coverage_values: list[float],
     evidence_density_values: list[float],
@@ -629,7 +675,7 @@ def _compute_abstraction_components(
 
 
 def merge_batch_results(
-    batch_results: list[dict[str, Any]],
+    batch_results: list[BatchResultPayload],
     *,
     abstraction_sub_axes: tuple[str, ...],
     abstraction_component_names: dict[str, str],

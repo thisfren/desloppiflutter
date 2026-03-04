@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Callable
 from functools import lru_cache
-from typing import Any
 
-CommandHandler = Callable[[Any], None]
+CommandHandler = Callable[[argparse.Namespace], None]
 
 
 def _build_handlers() -> dict[str, CommandHandler]:

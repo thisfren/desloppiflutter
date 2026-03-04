@@ -22,30 +22,30 @@ def json_default(obj: Any) -> Any:
     )
 
 
-def _get_overall_score(state: StateModel) -> float | None:
+def get_overall_score(state: StateModel) -> float | None:
     value = state.get("overall_score")
     return float(value) if isinstance(value, int | float) else None
 
 
-def _get_objective_score(state: StateModel) -> float | None:
+def get_objective_score(state: StateModel) -> float | None:
     value = state.get("objective_score")
     return float(value) if isinstance(value, int | float) else None
 
 
-def _get_strict_score(state: StateModel) -> float | None:
+def get_strict_score(state: StateModel) -> float | None:
     value = state.get("strict_score")
     return float(value) if isinstance(value, int | float) else None
 
 
-def _get_verified_strict_score(state: StateModel) -> float | None:
+def get_verified_strict_score(state: StateModel) -> float | None:
     value = state.get("verified_strict_score")
     return float(value) if isinstance(value, int | float) else None
 
 
 __all__ = [
-    "_get_objective_score",
-    "_get_overall_score",
-    "_get_strict_score",
-    "_get_verified_strict_score",
+    "get_objective_score",
+    "get_overall_score",
+    "get_strict_score",
+    "get_verified_strict_score",
     "json_default",
 ]

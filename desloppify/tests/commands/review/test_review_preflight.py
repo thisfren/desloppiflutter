@@ -572,7 +572,7 @@ def test_run_batches_calls_preflight():
         patch(_PREFLIGHT) as mock_pf,
         patch(_RUNTIME, return_value=_mock_runtime()),
         patch(_LANG, return_value=MagicMock(name="python")),
-        patch("desloppify.app.commands.review.cmd._do_run_batches"),
+        patch("desloppify.app.commands.review.cmd.do_run_batches"),
     ):
         cmd_review(_review_args(run_batches=True))
         mock_pf.assert_called_once()

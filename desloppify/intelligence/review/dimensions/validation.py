@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.text_utils import is_numeric
 
 _PROMPT_FIELDS = ("description", "look_for", "skip")
 _PROMPT_OPTIONAL_FIELDS = ("meta",)

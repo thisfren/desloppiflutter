@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from desloppify.base.text.text_api import strip_c_style_comments
+from desloppify.base.text_utils import strip_c_style_comments
 from desloppify.languages.typescript.syntax.scanner import scan_code
 
 __all__ = [

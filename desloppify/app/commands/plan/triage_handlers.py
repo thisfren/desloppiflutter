@@ -9,7 +9,9 @@ from desloppify.app.commands.helpers.state import require_completed_scan
 from desloppify.app.commands.plan.triage import confirmations as _confirmations_mod
 from desloppify.app.commands.plan.triage import display as _display_mod
 from desloppify.app.commands.plan.triage import helpers as _helpers_mod
-from desloppify.app.commands.plan.triage import stages as _stages_mod
+from desloppify.app.commands.plan.triage import _stage_completion_commands as _completion_mod
+from desloppify.app.commands.plan.triage import _stage_flow_commands as _flow_mod
+from desloppify.app.commands.plan.triage import _stage_validation as _validation_mod
 from desloppify.app.commands.plan.triage_playbook import TRIAGE_CMD_OBSERVE
 from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan import (
@@ -27,30 +29,38 @@ _validate_attestation = _confirmations_mod._validate_attestation
 _triage_coverage = _helpers_mod._triage_coverage
 
 
+_TRIAGE_SUBMODULES = (
+    _helpers_mod, _display_mod, _confirmations_mod,
+    _flow_mod, _completion_mod, _validation_mod,
+)
+
+
 def _sync_triage_module_bindings() -> None:
-    """Propagate monkeypatch-friendly bindings into split triage modules."""
-    _helpers_mod.command_runtime = command_runtime
-    _helpers_mod.save_plan = save_plan
+    """Propagate monkeypatch-friendly bindings into split triage modules.
 
-    _display_mod.command_runtime = command_runtime
-    _display_mod.collect_triage_input = collect_triage_input
-    _display_mod.detect_recurring_patterns = detect_recurring_patterns
-    _display_mod.load_plan = load_plan
+    Each submodule imports ``command_runtime``, ``load_plan``, etc. at the
+    top level.  Tests monkeypatch those names on *this* handler module; this
+    function copies the (potentially patched) references into every submodule
+    that already has the name, so mocks propagate automatically.
 
-    _confirmations_mod.append_log_entry = append_log_entry
-    _confirmations_mod.collect_triage_input = collect_triage_input
-    _confirmations_mod.command_runtime = command_runtime
-    _confirmations_mod.detect_recurring_patterns = detect_recurring_patterns
-    _confirmations_mod.load_plan = load_plan
-    _confirmations_mod.save_plan = save_plan
-
-    _stages_mod.append_log_entry = append_log_entry
-    _stages_mod.collect_triage_input = collect_triage_input
-    _stages_mod.command_runtime = command_runtime
-    _stages_mod.detect_recurring_patterns = detect_recurring_patterns
-    _stages_mod.extract_issue_citations = extract_issue_citations
-    _stages_mod.load_plan = load_plan
-    _stages_mod.save_plan = save_plan
+    Adding a new submodule: append it to ``_TRIAGE_SUBMODULES``.
+    Adding a new patchable function: add it to the ``bindings`` dict below
+    *and* import it at the top of this file — submodules that import the same
+    name will pick it up automatically via ``hasattr``.
+    """
+    bindings = {
+        "command_runtime": command_runtime,
+        "save_plan": save_plan,
+        "load_plan": load_plan,
+        "collect_triage_input": collect_triage_input,
+        "detect_recurring_patterns": detect_recurring_patterns,
+        "append_log_entry": append_log_entry,
+        "extract_issue_citations": extract_issue_citations,
+    }
+    for mod in _TRIAGE_SUBMODULES:
+        for name, fn in bindings.items():
+            if hasattr(mod, name):
+                setattr(mod, name, fn)
 
 
 def _cmd_triage_start(args: argparse.Namespace) -> None:
@@ -115,21 +125,21 @@ def cmd_plan_triage(args: argparse.Namespace) -> None:
         _confirmations_mod._cmd_confirm_stage(args)
         return
     if getattr(args, "complete", False):
-        _stages_mod._cmd_triage_complete(args)
+        _completion_mod._cmd_triage_complete(args)
         return
     if getattr(args, "confirm_existing", False):
-        _stages_mod._cmd_confirm_existing(args)
+        _completion_mod._cmd_confirm_existing(args)
         return
 
     stage = getattr(args, "stage", None)
     if stage == "observe":
-        _stages_mod._cmd_stage_observe(args)
+        _flow_mod._cmd_stage_observe(args)
         return
     if stage == "reflect":
-        _stages_mod._cmd_stage_reflect(args)
+        _flow_mod._cmd_stage_reflect(args)
         return
     if stage == "organize":
-        _stages_mod._cmd_stage_organize(args)
+        _flow_mod._cmd_stage_organize(args)
         return
 
     if getattr(args, "dry_run", False):

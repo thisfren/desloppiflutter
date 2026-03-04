@@ -17,7 +17,7 @@ from desloppify.engine._scoring.policy.core import (
 from desloppify.engine._scoring.results.core import compute_dimension_scores
 from desloppify.engine.detectors.security import detect_security_issues
 from desloppify.engine.policy.zones import ZONE_POLICIES, FileZoneMap, Zone
-from desloppify.intelligence.narrative.headline import _compute_headline
+from desloppify.intelligence.narrative.headline import compute_headline
 from desloppify.languages.typescript.detectors.security import detect_ts_security
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -789,7 +789,7 @@ class TestSecurityInNarrative:
     """Verify security issues appear in narrative headline."""
 
     def test_security_in_narrative_headline(self):
-        result = _compute_headline(
+        result = compute_headline(
             "middle_grind",
             {"lowest_dimensions": []},
             {},
@@ -805,7 +805,7 @@ class TestSecurityInNarrative:
         assert "\u26a0 3 security issues" in result
 
     def test_no_security_no_prefix(self):
-        result = _compute_headline(
+        result = compute_headline(
             "first_scan",
             {},
             {},
@@ -821,7 +821,7 @@ class TestSecurityInNarrative:
         assert "\u26a0" not in result
 
     def test_security_with_milestone(self):
-        result = _compute_headline(
+        result = compute_headline(
             "middle_grind",
             {},
             {},
@@ -838,7 +838,7 @@ class TestSecurityInNarrative:
         assert "Great job!" in result
 
     def test_security_singular(self):
-        result = _compute_headline(
+        result = compute_headline(
             "middle_grind",
             {"lowest_dimensions": []},
             {},

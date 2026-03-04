@@ -41,6 +41,7 @@ from desloppify.engine._work_queue.synthetic import (
     build_subjective_items,
     build_triage_stage_items,
 )
+from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.state import StateModel
 
 # Sentinel: "read scan_path from state" (the safe default).
@@ -84,9 +85,9 @@ class QueueBuildOptions:
 class WorkQueueResult(TypedDict):
     """Typed shape of the dict returned by :func:`build_work_queue`."""
 
-    items: list[dict]
+    items: list[WorkQueueItem]
     total: int
-    grouped: dict[str, list[dict]]
+    grouped: dict[str, list[WorkQueueItem]]
     new_ids: set[str]
 
 
@@ -177,7 +178,7 @@ def _gather_subjective_items(
     opts: QueueBuildOptions,
     plan: dict | None,
     threshold: float,
-) -> list[dict]:
+) -> list[WorkQueueItem]:
     """Build synthetic subjective items, gated by SubjectiveVisibility policy."""
     if not opts.include_subjective:
         return []
@@ -205,7 +206,7 @@ def _gather_subjective_items(
         else set()
     )
 
-    result: list[dict] = []
+    result: list[WorkQueueItem] = []
     for item in candidates:
         if not scope_matches(item, opts.scope):
             continue
@@ -218,12 +219,12 @@ def _gather_subjective_items(
 
 def _gather_workflow_items(
     state: StateModel, plan: dict | None, status: str,
-) -> list[dict]:
+) -> list[WorkQueueItem]:
     """Inject triage stages, checkpoints, and create-plan when plan is active."""
     if not plan or status not in {"open", "all"}:
         return []
 
-    items: list[dict] = list(build_triage_stage_items(plan, state))
+    items: list[WorkQueueItem] = list(build_triage_stage_items(plan, state))
     for builder in (
         build_score_checkpoint_item,
         build_import_scores_item,
@@ -241,7 +242,7 @@ def _gather_workflow_items(
 _MIN_STANDALONE_IMPACT = 0.05
 
 
-def _passes_impact_floor(item: dict) -> bool:
+def _passes_impact_floor(item: WorkQueueItem) -> bool:
     """Return True if item should survive the impact floor filter."""
     if item.get("kind") != "issue":
         return True
@@ -252,8 +253,8 @@ def _passes_impact_floor(item: dict) -> bool:
 
 
 def _plan_presort(
-    items: list[dict], state: StateModel, plan: dict | None,
-) -> tuple[set[str], list[dict]]:
+    items: list[WorkQueueItem], state: StateModel, plan: dict | None,
+) -> tuple[set[str], list[WorkQueueItem]]:
     """Enrich plan metadata and stamp sort keys before sorting.
 
     Returns ``(new_ids, skipped)`` — skipped items are removed from
@@ -271,8 +272,8 @@ def _plan_presort(
 
 
 def _plan_postsort(
-    items: list[dict],
-    skipped: list[dict],
+    items: list[WorkQueueItem],
+    skipped: list[WorkQueueItem],
     plan: dict | None,
     opts: QueueBuildOptions,
 ) -> None:
@@ -287,7 +288,7 @@ def _plan_postsort(
     items[:] = focused
 
 
-def _empty_queue_fallback(plan: dict | None) -> list[dict]:
+def _empty_queue_fallback(plan: dict | None) -> list[WorkQueueItem]:
     """Return a 'run scan' nudge when an active plan cycle has cleared."""
     if not plan:
         return []

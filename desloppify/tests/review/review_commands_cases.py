@@ -20,7 +20,7 @@ import desloppify.app.commands.review.runner_parallel as runner_parallel_mod
 import desloppify.app.commands.review.runner_process as runner_process_mod
 from desloppify import state as state_mod
 from desloppify.app.commands.review.batch.orchestrator import (
-    _do_run_batches,
+    do_run_batches,
 )
 from desloppify.app.commands.review.importing.cmd import do_import as _do_import
 from desloppify.app.commands.review.importing.cmd import (
@@ -793,7 +793,7 @@ class TestCmdReviewPrepare:
                 "desloppify.app.commands.review.batch.orchestrator._do_import",
             ) as mock_import,
         ):
-            _do_run_batches(
+            do_run_batches(
                 args, empty_state, mock_lang_with_zones, "fake_sp", config={}
             )
 
@@ -1001,7 +1001,7 @@ class TestCmdReviewPrepare:
                 side_effect=fake_import,
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         payload = captured["payload"]
         assert isinstance(payload, dict)
@@ -1135,7 +1135,7 @@ class TestCmdReviewPrepare:
                 side_effect=fake_import,
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         assert captured["kwargs"]["allow_partial"] is True
 
@@ -1248,7 +1248,7 @@ class TestCmdReviewPrepare:
                 ),
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         assert "tasks" in captured_execute_kwargs
         assert "selected_indexes" not in captured_execute_kwargs
@@ -1361,7 +1361,7 @@ class TestCmdReviewPrepare:
                 side_effect=fake_import,
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         assert "payload" in captured
         merged_payload = captured["payload"]
@@ -1501,7 +1501,7 @@ class TestCmdReviewPrepare:
                 side_effect=fake_import,
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         payload = captured["payload"]
         assert payload["assessments"]["mid_level_elegance"] == pytest.approx(74.1, abs=0.1)
@@ -1579,7 +1579,7 @@ class TestCmdReviewPrepare:
             ),
         ):
             with pytest.raises(CommandError) as exc_info:
-                _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+                do_run_batches(args, empty_state, lang, "fake_sp", config={})
         assert exc_info.value.exit_code == 1
 
     def test_do_run_batches_keeps_abstraction_component_breakdown(
@@ -1691,7 +1691,7 @@ class TestCmdReviewPrepare:
                 side_effect=fake_import,
             ),
         ):
-            _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+            do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         payload = captured["payload"]
         assert isinstance(payload, dict)
@@ -2211,6 +2211,26 @@ class TestCmdReviewPrepare:
         )
         assert code == 9
 
+    def test_run_followup_scan_default_respects_queue_gate(self, tmp_path):
+
+        mock_run = MagicMock(return_value=MagicMock(returncode=0))
+        runner_helpers_mod.run_followup_scan(
+            lang_name="typescript",
+            scan_path=str(tmp_path),
+            deps=runner_helpers_mod.FollowupScanDeps(
+                project_root=tmp_path,
+                timeout_seconds=60,
+                python_executable="python",
+                subprocess_run=mock_run,
+                timeout_error=TimeoutError,
+                colorize_fn=lambda text, _: text,
+            ),
+        )
+
+        cmd = mock_run.call_args.args[0]
+        assert "--force-rescan" not in cmd
+        assert "--attest" not in cmd
+
     def test_do_run_batches_scan_after_import_exits_on_failed_followup(
         self, empty_state, tmp_path
     ):
@@ -2281,7 +2301,7 @@ class TestCmdReviewPrepare:
             ),
         ):
             with pytest.raises(CommandError) as exc_info:
-                _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+                do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         assert exc_info.value.exit_code == 7
 
@@ -2343,7 +2363,7 @@ class TestCmdReviewPrepare:
             ),
         ):
             with pytest.raises(SystemExit) as exc_info:
-                _do_run_batches(args, empty_state, lang, "fake_sp", config={})
+                do_run_batches(args, empty_state, lang, "fake_sp", config={})
 
         assert exc_info.value.code == 130
         summary_files = sorted(runs_dir.glob("*/run_summary.json"))

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import desloppify.base.discovery.api as _discovery_api_mod
+import desloppify.base.discovery.source as _discovery_source_mod
 from desloppify.engine._scoring.detection import detector_pass_rate
 from desloppify.engine._scoring.policy.core import HOLISTIC_POTENTIAL
 from desloppify.engine.detectors.review_coverage import detect_holistic_review_staleness
@@ -55,7 +55,7 @@ def patch_project_root(monkeypatch):
 
     def _patch(tmp_path):
         monkeypatch.setattr(ctx, "project_root", tmp_path)
-        _discovery_api_mod.clear_source_file_cache_for_tests()
+        _discovery_source_mod.clear_source_file_cache_for_tests()
 
     return _patch
 

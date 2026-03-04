@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 
 # ── Test override hooks (monkeypatch these in tests) ──────────────
 PROJECT_ROOT: Path | None = None

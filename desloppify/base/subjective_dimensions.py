@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from functools import lru_cache
 
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.text_utils import is_numeric
 from desloppify.intelligence.review.dimensions.data import (
     load_dimensions as _load_dimensions,
 )

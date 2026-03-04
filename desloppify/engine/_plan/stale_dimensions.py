@@ -9,20 +9,17 @@ Two independent sync functions:
 """
 
 from __future__ import annotations
-
-import hashlib
 from dataclasses import dataclass, field
 
 from desloppify.base.config import DEFAULT_TARGET_STRICT_SCORE
+from desloppify.engine._plan import stale_policy as stale_policy_mod
 from desloppify.engine._plan.promoted_ids import promoted_insertion_index
 from desloppify.engine._plan.schema import PlanModel, ensure_plan_defaults
 from desloppify.engine._plan.subjective_policy import (
-    NON_OBJECTIVE_DETECTORS,
+    NON_OBJECTIVE_DETECTORS as _NON_OBJECTIVE_DETECTORS,
     SubjectiveVisibility,
 )
 from desloppify.engine._state.schema import StateModel
-from desloppify.engine._work_queue.helpers import slugify
-from desloppify.engine.planning.scorecard_projection import all_subjective_entries
 
 SUBJECTIVE_PREFIX = "subjective::"
 TRIAGE_ID = "triage::pending"  # deprecated, kept for migration
@@ -77,18 +74,10 @@ class UnscoredDimensionSyncResult:
 
 def _current_stale_ids(state: StateModel) -> set[str]:
     """Return the set of ``subjective::<slug>`` IDs that are currently stale."""
-    dim_scores = state.get("dimension_scores", {}) or {}
-    if not dim_scores:
-        return set()
-
-    stale: set[str] = set()
-    for entry in all_subjective_entries(state, dim_scores=dim_scores):
-        if not entry.get("stale"):
-            continue
-        dim_key = entry.get("dimension_key", "")
-        if dim_key:
-            stale.add(f"{SUBJECTIVE_PREFIX}{slugify(dim_key)}")
-    return stale
+    return stale_policy_mod.current_stale_ids(
+        state,
+        subjective_prefix=SUBJECTIVE_PREFIX,
+    )
 
 
 def current_unscored_ids(state: StateModel) -> set[str]:
@@ -98,42 +87,10 @@ def current_unscored_ids(state: StateModel) -> set[str]:
     (common before any reviews have been run), falls through to
     ``dimension_scores`` which carries placeholder metadata from scan.
     """
-    # Primary source: subjective_assessments with placeholder=True
-    assessments = state.get("subjective_assessments")
-    if isinstance(assessments, dict) and assessments:
-        unscored: set[str] = set()
-        for dim_key, payload in assessments.items():
-            if not isinstance(payload, dict):
-                continue
-            if not payload.get("placeholder"):
-                continue
-            if dim_key:
-                unscored.add(f"{SUBJECTIVE_PREFIX}{slugify(dim_key)}")
-        return unscored
-
-    # Fallback: check dimension_scores directly for placeholder subjective
-    # dimensions.  This handles the common case where subjective_assessments
-    # hasn't been populated yet but dimension_scores already has placeholder
-    # entries from scan.  We can't use scorecard_subjective_entries() here
-    # because the scorecard pipeline intentionally hides placeholders.
-    dim_scores = state.get("dimension_scores", {}) or {}
-    if not dim_scores:
-        return set()
-
-    unscored = set()
-    for _name, data in dim_scores.items():
-        if not isinstance(data, dict):
-            continue
-        detectors = data.get("detectors", {})
-        meta = detectors.get("subjective_assessment")
-        if not isinstance(meta, dict):
-            continue
-        if not meta.get("placeholder"):
-            continue
-        dim_key = meta.get("dimension_key", "")
-        if dim_key:
-            unscored.add(f"{SUBJECTIVE_PREFIX}{slugify(dim_key)}")
-    return unscored
+    return stale_policy_mod.current_unscored_ids(
+        state,
+        subjective_prefix=SUBJECTIVE_PREFIX,
+    )
 
 
 def current_under_target_ids(
@@ -146,27 +103,11 @@ def current_under_target_ids(
     These are dimensions whose assessment is still current (not needing refresh)
     but whose score hasn't reached the target yet.
     """
-    dim_scores = state.get("dimension_scores", {}) or {}
-    if not dim_scores:
-        return set()
-
-    stale_ids = _current_stale_ids(state)
-    unscored_ids = current_unscored_ids(state)
-
-    under_target: set[str] = set()
-    for entry in all_subjective_entries(state, dim_scores=dim_scores):
-        if entry.get("placeholder") or entry.get("stale"):
-            continue
-        strict_val = float(entry.get("strict", entry.get("score", 100.0)))
-        if strict_val >= target_strict:
-            continue
-        dim_key = entry.get("dimension_key", "")
-        if not dim_key:
-            continue
-        fid = f"{SUBJECTIVE_PREFIX}{slugify(dim_key)}"
-        if fid not in stale_ids and fid not in unscored_ids:
-            under_target.add(fid)
-    return under_target
+    return stale_policy_mod.current_under_target_ids(
+        state,
+        target_strict=target_strict,
+        subjective_prefix=SUBJECTIVE_PREFIX,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +202,7 @@ def sync_stale_dimensions(
     else:
         has_real_items = any(
             f.get("status") == "open"
-            and f.get("detector") not in NON_OBJECTIVE_DETECTORS
+            and f.get("detector") not in _NON_OBJECTIVE_DETECTORS
             and not f.get("suppressed")
             for f in state.get("issues", {}).values()
         )
@@ -311,15 +252,7 @@ def review_issue_snapshot_hash(state: StateModel) -> str:
 
     Returns empty string when there are no open review issues.
     """
-    issues = state.get("issues", {})
-    review_ids = sorted(
-        fid for fid, f in issues.items()
-        if f.get("status") == "open"
-        and f.get("detector") in ("review", "concerns")
-    )
-    if not review_ids:
-        return ""
-    return hashlib.sha256("|".join(review_ids).encode()).hexdigest()[:16]
+    return stale_policy_mod.review_issue_snapshot_hash(state)
 
 
 @dataclass
@@ -520,7 +453,7 @@ def sync_create_plan_needed(
         issues = state.get("issues", {})
         has_objective = any(
             f.get("status") == "open"
-            and f.get("detector") not in NON_OBJECTIVE_DETECTORS
+            and f.get("detector") not in _NON_OBJECTIVE_DETECTORS
             for f in issues.values()
         )
     if not has_objective:
@@ -542,13 +475,7 @@ def compute_new_issue_ids(plan: PlanModel, state: StateModel) -> set[str]:
 
     Returns an empty set when no prior triage has recorded ``triaged_ids``.
     """
-    meta = plan.get("epic_triage_meta", {})
-    triaged = set(meta.get("triaged_ids", meta.get("synthesized_ids", [])))
-    current = {
-        fid for fid, f in state.get("issues", {}).items()
-        if f.get("status") == "open" and f.get("detector") in ("review", "concerns")
-    }
-    return current - triaged if triaged else set()
+    return stale_policy_mod.compute_new_issue_ids(plan, state)
 
 
 def is_triage_stale(plan: PlanModel, state: StateModel) -> bool:
@@ -564,30 +491,7 @@ def is_triage_stale(plan: PlanModel, state: StateModel) -> bool:
     through the plan.
     """
     ensure_plan_defaults(plan)
-    meta = plan.get("epic_triage_meta", {})
-
-    # Always check for genuinely new issues (same logic regardless of
-    # whether triage stages are in the queue).
-    issues = state.get("issues", {})
-    current_review_ids = {
-        fid for fid, f in issues.items()
-        if f.get("status") == "open"
-        and f.get("detector") in ("review", "concerns")
-    }
-    triaged_ids = set(meta.get("triaged_ids", []))
-    new_since_triage = current_review_ids - triaged_ids
-    if new_since_triage:
-        return True
-
-    # If triage stages are in queue but there's in-progress triage work,
-    # still consider it stale so the user finishes what they started.
-    confirmed = set(meta.get("triage_stages", {}).keys())
-    if confirmed:
-        order = set(plan.get("queue_order", []))
-        if order & TRIAGE_IDS:
-            return True
-
-    return False
+    return stale_policy_mod.is_triage_stale(plan, state, triage_ids=TRIAGE_IDS)
 
 
 @dataclass
@@ -696,7 +600,6 @@ def sync_communicate_score_needed(
 
 
 __all__ = [
-    "NON_OBJECTIVE_DETECTORS",
     "SUBJECTIVE_PREFIX",
     "TRIAGE_ID",
     "TRIAGE_IDS",

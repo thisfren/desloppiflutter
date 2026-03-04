@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import desloppify.base.discovery.api as discovery_api_mod
+import desloppify.base.discovery.source as discovery_source_mod
 from desloppify.languages.csharp.extractors import (
     extract_csharp_classes,
     extract_csharp_functions,
@@ -21,7 +21,7 @@ def patch_project_root(monkeypatch):
 
     def _patch(tmp_path):
         monkeypatch.setattr(ctx, "project_root", tmp_path)
-        discovery_api_mod.clear_source_file_cache_for_tests()
+        discovery_source_mod.clear_source_file_cache_for_tests()
 
     return _patch
 

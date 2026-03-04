@@ -15,14 +15,6 @@ from desloppify.app.commands.scan.artifacts import (
     build_scan_query_payload,
     emit_scorecard_badge,
 )
-from desloppify.app.commands.scan.helpers import (  # noqa: F401 (re-exports)
-    _audit_excluded_dirs,
-    _collect_codebase_metrics,
-    _effective_include_slow,
-    _resolve_scan_profile,
-    _warn_explicit_lang_with_no_files,
-    format_delta,
-)
 from desloppify.app.commands.scan.orchestrator import ScanOrchestrator
 from desloppify.app.commands.scan.plan_nudge import (
     print_plan_workflow_nudge as _print_plan_workflow_nudge_impl,
@@ -42,7 +34,6 @@ from desloppify.app.commands.scan.reporting.integrity_report import (
 from desloppify.app.commands.scan.reporting.summary import (  # noqa: F401
     show_diff_summary,
     show_score_delta,
-    show_strict_target_progress,
 )
 from desloppify.app.commands.scan.workflow import (
     ScanStateContractError,

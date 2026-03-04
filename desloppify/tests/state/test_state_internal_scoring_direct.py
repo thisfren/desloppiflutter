@@ -1,8 +1,9 @@
-"""Direct tests for _state.scoring helpers."""
+"""Direct tests for state-integration scoring helpers."""
 
 from __future__ import annotations
 
-import desloppify.engine._state.scoring as scoring_mod
+import desloppify.engine._scoring.state_integration as scoring_mod
+from desloppify.engine._state.scoring import suppression_metrics
 
 
 def test_count_issues_tracks_status_and_tiers():
@@ -57,7 +58,7 @@ def test_suppression_metrics_aggregates_recent_history():
         ]
     }
 
-    metrics = scoring_mod.suppression_metrics(state, window=2)
+    metrics = suppression_metrics(state, window=2)
     assert metrics["last_ignored"] == 1
     assert metrics["last_raw_issues"] == 5
     assert metrics["last_suppressed_pct"] == 20.0

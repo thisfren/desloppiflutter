@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
@@ -212,38 +213,51 @@ def _classify(detectors: set[str], signals: ConcernSignals) -> str:
     return "design_concern"
 
 
+_SUMMARY_TEMPLATES: dict[str, str] = {
+    "mixed_responsibilities": (
+        "Issues from {detector_count} detectors — may have too many responsibilities"
+    ),
+    "duplication_design": "Duplication pattern — assess if extraction is warranted",
+    "coupling_design": "Coupling pattern — assess if boundaries need adjustment",
+    "interface_design": "Interface complexity: {max_params} parameters",
+}
+_DEFAULT_SUMMARY_TEMPLATE = "Design signals from {detector_list}"
+
+
+def _summary_context(detectors: set[str], signals: ConcernSignals) -> dict[str, object]:
+    return {
+        "detector_count": len(detectors),
+        "detector_list": ", ".join(sorted(detectors)),
+        "max_params": int(signals.get("max_params", 0)),
+    }
+
+
+def _build_structural_summary(signals: ConcernSignals) -> str:
+    parts: list[str] = []
+    monster_loc = signals.get("monster_loc", 0)
+    if monster_loc:
+        funcs = signals.get("monster_funcs", [])
+        label = f" ({', '.join(funcs[:3])})" if funcs else ""
+        parts.append(f"monster function{label}: {int(monster_loc)} lines")
+    nesting = signals.get("max_nesting", 0)
+    if nesting >= ELEVATED_MAX_NESTING:
+        parts.append(f"nesting depth {int(nesting)}")
+    params = signals.get("max_params", 0)
+    if params >= ELEVATED_MAX_PARAMS:
+        parts.append(f"{int(params)} parameters")
+    return f"Structural complexity: {', '.join(parts) or 'elevated signals'}"
+
+
 def _build_summary(
     concern_type: str,
     detectors: set[str],
     signals: ConcernSignals,
 ) -> str:
     """Human-readable one-liner."""
-    if concern_type == "mixed_responsibilities":
-        return (
-            f"Issues from {len(detectors)} detectors — "
-            "may have too many responsibilities"
-        )
     if concern_type == "structural_complexity":
-        parts: list[str] = []
-        monster_loc = signals.get("monster_loc", 0)
-        if monster_loc:
-            funcs = signals.get("monster_funcs", [])
-            label = f" ({', '.join(funcs[:3])})" if funcs else ""
-            parts.append(f"monster function{label}: {int(monster_loc)} lines")
-        nesting = signals.get("max_nesting", 0)
-        if nesting >= ELEVATED_MAX_NESTING:
-            parts.append(f"nesting depth {int(nesting)}")
-        params = signals.get("max_params", 0)
-        if params >= ELEVATED_MAX_PARAMS:
-            parts.append(f"{int(params)} parameters")
-        return f"Structural complexity: {', '.join(parts) or 'elevated signals'}"
-    if concern_type == "duplication_design":
-        return "Duplication pattern — assess if extraction is warranted"
-    if concern_type == "coupling_design":
-        return "Coupling pattern — assess if boundaries need adjustment"
-    if concern_type == "interface_design":
-        return f"Interface complexity: {int(signals.get('max_params', 0))} parameters"
-    return f"Design signals from {', '.join(sorted(detectors))}"
+        return _build_structural_summary(signals)
+    template = _SUMMARY_TEMPLATES.get(concern_type, _DEFAULT_SUMMARY_TEMPLATE)
+    return template.format(**_summary_context(detectors, signals))
 
 
 def _build_evidence(
@@ -319,65 +333,87 @@ def _build_question(
     detectors: set[str], signals: ConcernSignals
 ) -> str:
     """Build targeted question from dominant signals."""
-    parts: list[str] = []
-
-    if len(detectors) >= MIN_DETECTORS_FOR_MIXED:
-        parts.append(
-            f"This file has issues across {len(detectors)} dimensions "
-            f"({', '.join(sorted(detectors))}). Is it trying to do too many "
-            "things, or is this complexity inherent to its domain?"
-        )
-
     funcs = signals.get("monster_funcs", [])
-    if funcs:
-        parts.append(
-            f"What are the distinct responsibilities in {funcs[0]}()? "
-            "Should it be decomposed into focused functions?"
-        )
+    context = {
+        "detector_count": len(detectors),
+        "detector_list": ", ".join(sorted(detectors)),
+        "first_monster_func": funcs[0] if funcs else "",
+    }
 
-    if signals.get("max_params", 0) >= ELEVATED_MAX_PARAMS:
-        parts.append(
-            "Should the parameters be grouped into a config/context object? "
-            "Which ones belong together?"
-        )
+    question_rules: tuple[
+        tuple[Callable[[set[str], ConcernSignals], bool], str],
+        ...,
+    ] = (
+        (
+            lambda dets, _signals: len(dets) >= MIN_DETECTORS_FOR_MIXED,
+            (
+                "This file has issues across {detector_count} dimensions "
+                "({detector_list}). Is it trying to do too many things, "
+                "or is this complexity inherent to its domain?"
+            ),
+        ),
+        (
+            lambda _dets, sig: bool(sig.get("monster_funcs")),
+            (
+                "What are the distinct responsibilities in {first_monster_func}()? "
+                "Should it be decomposed into focused functions?"
+            ),
+        ),
+        (
+            lambda _dets, sig: sig.get("max_params", 0) >= ELEVATED_MAX_PARAMS,
+            (
+                "Should the parameters be grouped into a config/context object? "
+                "Which ones belong together?"
+            ),
+        ),
+        (
+            lambda _dets, sig: sig.get("max_nesting", 0) >= ELEVATED_MAX_NESTING,
+            (
+                "Can the nesting be reduced with early returns, guard clauses, "
+                "or extraction into helper functions?"
+            ),
+        ),
+        (
+            lambda dets, _signals: "dupes" in dets or "boilerplate_duplication" in dets,
+            (
+                "Is the duplication worth extracting into a shared utility, "
+                "or is it intentional variation?"
+            ),
+        ),
+        (
+            lambda dets, _signals: "coupling" in dets,
+            (
+                "Is the coupling intentional or does it indicate a missing "
+                "abstraction boundary?"
+            ),
+        ),
+        (
+            lambda dets, _signals: "orphaned" in dets,
+            (
+                "Is this file truly dead, or is it used via a non-import mechanism "
+                "(dynamic import, CLI entry point, plugin)?"
+            ),
+        ),
+        (
+            lambda dets, _signals: "responsibility_cohesion" in dets,
+            (
+                "What are the distinct responsibilities? Should this module be "
+                "split along those lines?"
+            ),
+        ),
+    )
+    parts = [
+        template.format(**context)
+        for predicate, template in question_rules
+        if predicate(detectors, signals)
+    ]
+    if parts:
+        return " ".join(parts)
 
-    if signals.get("max_nesting", 0) >= ELEVATED_MAX_NESTING:
-        parts.append(
-            "Can the nesting be reduced with early returns, guard clauses, "
-            "or extraction into helper functions?"
-        )
-
-    if "dupes" in detectors or "boilerplate_duplication" in detectors:
-        parts.append(
-            "Is the duplication worth extracting into a shared utility, "
-            "or is it intentional variation?"
-        )
-
-    if "coupling" in detectors:
-        parts.append(
-            "Is the coupling intentional or does it indicate a missing "
-            "abstraction boundary?"
-        )
-
-    if "orphaned" in detectors:
-        parts.append(
-            "Is this file truly dead, or is it used via a non-import mechanism "
-            "(dynamic import, CLI entry point, plugin)?"
-        )
-
-    if "responsibility_cohesion" in detectors:
-        parts.append(
-            "What are the distinct responsibilities? Should this module be "
-            "split along those lines?"
-        )
-
-    if not parts:
-        parts.append(
-            "Review the flagged patterns — are they design problems that "
-            "need addressing, or acceptable given the file's role?"
-        )
-
-    return " ".join(parts)
+    return (
+        "Review the flagged patterns — are they design problems that "
+        "need addressing, or acceptable given the file's role?"
+    )
 
 
 # ── Generators ───────────────────────────────────────────────────────

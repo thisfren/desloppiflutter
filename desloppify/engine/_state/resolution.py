@@ -10,7 +10,7 @@ __all__ = [
     "resolve_issues",
 ]
 
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.text_utils import is_numeric
 from desloppify.engine._state.filtering import _matches_pattern
 from desloppify.engine._state.schema import (
     StateModel,
@@ -18,7 +18,22 @@ from desloppify.engine._state.schema import (
     utc_now,
     validate_state_invariants,
 )
-from desloppify.engine._state.scoring import _recompute_stats
+
+
+def _recompute_stats(
+    state: StateModel,
+    scan_path: str | None = None,
+    *,
+    subjective_integrity_target: float | None = None,
+) -> None:
+    """Local wrapper to avoid import-time cycles during state bootstrapping."""
+    from desloppify.engine._scoring.state_integration import recompute_stats
+
+    recompute_stats(
+        state,
+        scan_path=scan_path,
+        subjective_integrity_target=subjective_integrity_target,
+    )
 
 
 def coerce_assessment_score(value: object) -> float | None:

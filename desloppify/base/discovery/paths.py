@@ -6,15 +6,21 @@ import os
 from pathlib import Path
 
 from desloppify.base import text_utils as _text_utils
+from desloppify.base.runtime_state import current_runtime_context
 
-PROJECT_ROOT = _text_utils.get_project_root().resolve()
-DEFAULT_PATH = PROJECT_ROOT / "src"
-SRC_PATH = PROJECT_ROOT / os.environ.get("DESLOPPIFY_SRC", "src")
-
+_DEFAULT_PROJECT_ROOT = Path(os.environ.get("DESLOPPIFY_ROOT", Path.cwd())).resolve()
 
 def get_project_root() -> Path:
-    """Return the runtime project root."""
-    return _text_utils.get_project_root().resolve()
+    """Return the active project root, checking RuntimeContext first."""
+    override = current_runtime_context().project_root
+    if override is not None:
+        return Path(override).resolve()
+    return _DEFAULT_PROJECT_ROOT
+
+
+PROJECT_ROOT = get_project_root()
+DEFAULT_PATH = PROJECT_ROOT / "src"
+SRC_PATH = PROJECT_ROOT / os.environ.get("DESLOPPIFY_SRC", "src")
 
 
 def get_default_path() -> Path:
@@ -48,8 +54,14 @@ def read_code_snippet(
 
 
 def get_area(filepath: str, *, min_depth: int = 2) -> str:
-    """Public wrapper for area derivation from a relative file path."""
-    return _text_utils.get_area(filepath, min_depth=min_depth)
+    """Derive an area name from a file path (generic: first 2 components)."""
+    text = (filepath or "").strip()
+    if not text:
+        return "(unknown)"
+    parts = Path(text).parts
+    if not parts:
+        return "(unknown)"
+    return "/".join(parts[:2]) if len(parts) >= min_depth else parts[0]
 
 
 __all__ = [

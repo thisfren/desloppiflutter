@@ -17,7 +17,7 @@ from desloppify.app.commands.helpers.queue_progress import (
 from desloppify.app.commands.helpers.runtime import command_runtime
 from desloppify.base.config import DEFAULT_TARGET_STRICT_SCORE, target_strict_score_from_config
 from desloppify.app.commands.helpers.state import require_completed_scan
-from desloppify.base.discovery.api import safe_write_text
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
 from desloppify.base.output.terminal import colorize
 from desloppify.app.skill_docs import check_skill_version

@@ -9,7 +9,8 @@ from pathlib import Path
 
 from desloppify.base.output.fallbacks import log_best_effort_failure
 from desloppify.base.discovery.paths import SRC_PATH
-from desloppify.base.text.text_api import get_project_root, strip_c_style_comments
+from desloppify.base.discovery.paths import get_project_root
+from desloppify.base.text_utils import strip_c_style_comments
 
 TS_IMPORT_RE = re.compile(
     r"""(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)(?:type\s+)?['\"]([^'\"]+)['\"]""",

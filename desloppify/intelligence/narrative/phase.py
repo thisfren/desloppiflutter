@@ -7,7 +7,7 @@ from desloppify.state import StateModel, score_snapshot
 from ._constants import _history_strict
 
 
-def _detect_phase(history: list[dict], strict_score: float | None) -> str:
+def detect_phase(history: list[dict], strict_score: float | None) -> str:
     """Detect project phase from scan history trajectory."""
     if not history:
         return "first_scan"
@@ -50,7 +50,7 @@ def _detect_phase(history: list[dict], strict_score: float | None) -> str:
     return "middle_grind"
 
 
-def _detect_milestone(
+def detect_milestone(
     state: StateModel, _diff: dict | None, history: list[dict],
 ) -> str | None:
     """Detect notable milestones worth celebrating."""

@@ -270,41 +270,13 @@ class TestReaders:
 
 
 class TestDeprecatedAction:
-    """Tests for _DeprecatedAction and _DeprecatedBoolAction."""
+    """Removed deprecated parser actions stay removed."""
 
-    def test_deprecated_action_stores_value_and_warns(self, capsys):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--old-flag",
-            action=parser_admin_mod._DeprecatedAction,
-            type=int,
-        )
-        args = parser.parse_args(["--old-flag", "42"])
-        assert args.old_flag == 42
-        captured = capsys.readouterr()
-        assert "deprecated" in captured.err.lower()
-        assert "--old-flag" in captured.err
+    def test_deprecated_action_removed(self):
+        assert not hasattr(parser_admin_mod, "_DeprecatedAction")
 
-    def test_deprecated_bool_action_stores_true_and_warns(self, capsys):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--legacy-bool",
-            action=parser_admin_mod._DeprecatedBoolAction,
-        )
-        args = parser.parse_args(["--legacy-bool"])
-        assert args.legacy_bool is True
-        captured = capsys.readouterr()
-        assert "deprecated" in captured.err.lower()
-        assert "--legacy-bool" in captured.err
-
-    def test_deprecated_bool_default_is_false(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--legacy",
-            action=parser_admin_mod._DeprecatedBoolAction,
-        )
-        args = parser.parse_args([])
-        assert args.legacy is False
+    def test_deprecated_bool_action_removed(self):
+        assert not hasattr(parser_admin_mod, "_DeprecatedBoolAction")
 
 
 class TestDetectParser:
@@ -565,7 +537,7 @@ class TestPlanAndVizParsers:
     def test_plan_parser(self):
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="command")
-        parser_groups_mod._add_plan_parser(sub)
+        parser_groups_mod.add_plan_parser(sub)
 
         args = parser.parse_args(["plan", "--output", "plan.md"])
         assert args.output == "plan.md"

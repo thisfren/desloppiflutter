@@ -6,8 +6,10 @@ import hashlib
 import re
 from pathlib import Path
 
-from desloppify.base.discovery.api import find_source_files, resolve_path
-from desloppify.base.text.text_api import strip_c_style_comments
+from desloppify.base.discovery.file_paths import resolve_path
+
+from desloppify.base.discovery.source import find_source_files
+from desloppify.base.text_utils import strip_c_style_comments
 from desloppify.engine.detectors.base import FunctionInfo
 from desloppify.languages.csharp._parse_helpers import (
     find_matching_brace as _shared_find_matching_brace,

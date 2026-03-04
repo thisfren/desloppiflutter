@@ -8,7 +8,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import log
 from desloppify.base.discovery.paths import get_src_path
 from desloppify.engine.detectors import complexity as complexity_detector_mod

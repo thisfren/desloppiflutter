@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from desloppify.intelligence.narrative.action_engine import compute_actions
 from desloppify.intelligence.narrative.action_models import (
@@ -13,9 +14,9 @@ from desloppify.intelligence.narrative.dimensions import (
     _analyze_debt,
     _analyze_dimensions,
 )
-from desloppify.intelligence.narrative.headline import _compute_headline
-from desloppify.intelligence.narrative.phase import _detect_milestone, _detect_phase
-from desloppify.intelligence.narrative.reminders import _compute_reminders
+from desloppify.intelligence.narrative.headline import compute_headline
+from desloppify.intelligence.narrative.phase import detect_milestone, detect_phase
+from desloppify.intelligence.narrative.reminders import compute_reminders
 from desloppify.intelligence.narrative.signals import (
     compute_badge_status as _compute_badge_status,
 )
@@ -55,13 +56,13 @@ from desloppify.state import StateModel
 
 @dataclass(frozen=True)
 class NarrativeContext:
-    """Optional context inputs for narrative computation."""
+    """Context inputs for narrative computation."""
 
-    diff: dict | None = None
+    command: str
+    diff: dict[str, Any] | None = None
     lang: str | None = None
-    command: str | None = None
-    config: dict | None = None
-    plan: dict | None = None
+    config: dict[str, Any] | None = None
+    plan: dict[str, Any] | None = None
 
 
 def compute_narrative(
@@ -69,7 +70,7 @@ def compute_narrative(
     context: NarrativeContext | None = None,
 ) -> NarrativeResult:
     """Compute structured narrative context from state data."""
-    resolved_context = context or NarrativeContext()
+    resolved_context = context or NarrativeContext(command="")
 
     diff = resolved_context.diff
     lang = resolved_context.lang
@@ -87,10 +88,10 @@ def compute_narrative(
     by_detector = _count_open_by_detector(issues)
     badge = _compute_badge_status()
 
-    phase = _detect_phase(history, strict_score)
+    phase = detect_phase(history, strict_score)
     dimensions = _analyze_dimensions(dim_scores, history, state)
     debt = _analyze_debt(dim_scores, issues, history)
-    milestone = _detect_milestone(state, None, history)
+    milestone = detect_milestone(state, None, history)
     clusters = plan.get("clusters") if isinstance(plan, dict) else None
     action_context = ActionContext(
         by_detector=by_detector,
@@ -108,7 +109,7 @@ def compute_narrative(
     verification_step = _compute_verification_step(command)
     risk_flags = _compute_risk_flags(state, debt)
     strict_target = _compute_strict_target(strict_score, config)
-    headline = _compute_headline(
+    headline = compute_headline(
         phase,
         dimensions,
         debt,
@@ -120,7 +121,7 @@ def compute_narrative(
         history,
         open_by_detector=by_detector,
     )
-    reminders, updated_reminder_history = _compute_reminders(
+    reminders, updated_reminder_history = compute_reminders(
         state, lang, phase, debt, actions, dimensions, badge, command, config=config
     )
 

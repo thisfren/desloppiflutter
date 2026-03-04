@@ -6,14 +6,14 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from desloppify.cli import create_parser
-from desloppify.base.discovery.api import (
+from desloppify.base.discovery.source import (
     disable_file_cache,
     enable_file_cache,
     is_file_cache_enabled,
 )
 from desloppify.base.registry import DETECTORS, display_order
-from desloppify.intelligence.narrative.headline import _compute_headline
-from desloppify.intelligence.narrative.reminders import _compute_reminders
+from desloppify.intelligence.narrative.headline import compute_headline
+from desloppify.intelligence.narrative.reminders import compute_reminders
 from desloppify.intelligence.review import (
     DIMENSION_PROMPTS,
     LANG_GUIDANCE,
@@ -118,7 +118,7 @@ class TestNarrativeIntegration:
             "reminder_history": {},
             "strict_score": 80.0,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -146,7 +146,7 @@ class TestNarrativeIntegration:
             "issues": {},
             "reminder_history": {},
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -161,7 +161,7 @@ class TestNarrativeIntegration:
 
     def test_no_reminder_when_no_cache(self):
         state = {"issues": {}, "reminder_history": {}}
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -181,7 +181,7 @@ class TestNarrativeIntegration:
             "reminder_history": {},
             "strict_score": 85.0,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -203,7 +203,7 @@ class TestNarrativeIntegration:
             "reminder_history": {},
             "strict_score": 60.0,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -233,7 +233,7 @@ class TestNarrativeIntegration:
             "reminder_history": {},
             "strict_score": 95.0,
         }
-        reminders, _ = _compute_reminders(
+        reminders, _ = compute_reminders(
             state,
             "typescript",
             "middle_grind",
@@ -247,7 +247,7 @@ class TestNarrativeIntegration:
         assert "review_not_run" not in types
 
     def test_headline_includes_review_in_maintenance(self):
-        headline = _compute_headline(
+        headline = compute_headline(
             "maintenance",
             {},
             {},
@@ -263,7 +263,7 @@ class TestNarrativeIntegration:
         assert "review issue" in headline.lower()
 
     def test_headline_no_review_in_early_momentum(self):
-        headline = _compute_headline(
+        headline = compute_headline(
             "early_momentum",
             {},
             {},
@@ -356,20 +356,29 @@ class TestCLI:
         args = parser.parse_args(["review", "--import", "issues.json", "--allow-partial"])
         assert args.allow_partial is True
 
-    def test_review_max_age_flag(self):
+    def test_review_max_age_flag_rejected(self):
         parser = create_parser()
-        args = parser.parse_args(["review", "--max-age", "60"])
-        assert args.max_age == 60
+        try:
+            parser.parse_args(["review", "--max-age", "60"])
+            raise AssertionError("Expected SystemExit for removed --max-age")
+        except SystemExit as exc:
+            assert exc.code == 2
 
-    def test_review_max_files_flag(self):
+    def test_review_max_files_flag_rejected(self):
         parser = create_parser()
-        args = parser.parse_args(["review", "--max-files", "25"])
-        assert args.max_files == 25
+        try:
+            parser.parse_args(["review", "--max-files", "25"])
+            raise AssertionError("Expected SystemExit for removed --max-files")
+        except SystemExit as exc:
+            assert exc.code == 2
 
-    def test_review_refresh_flag(self):
+    def test_review_refresh_flag_rejected(self):
         parser = create_parser()
-        args = parser.parse_args(["review", "--refresh"])
-        assert args.refresh is True
+        try:
+            parser.parse_args(["review", "--refresh"])
+            raise AssertionError("Expected SystemExit for removed --refresh")
+        except SystemExit as exc:
+            assert exc.code == 2
 
     def test_review_dimensions_flag(self):
         parser = create_parser()
@@ -401,7 +410,6 @@ class TestCLI:
                 "45",
                 "--batch-stall-kill-seconds",
                 "75",
-                "--save-run-log",
                 "--run-log-file",
                 ".desloppify/subagents/runs/custom.log",
                 "--dry-run",
@@ -419,7 +427,6 @@ class TestCLI:
         assert args.batch_heartbeat_seconds == 2.5
         assert args.batch_stall_warning_seconds == 45
         assert args.batch_stall_kill_seconds == 75
-        assert args.save_run_log is True
         assert args.run_log_file == ".desloppify/subagents/runs/custom.log"
         assert args.dry_run is True
         assert args.only_batches == "1,3"
@@ -684,7 +691,7 @@ class TestHeadlineBugFix:
         """Regression: None + review_suffix shouldn't TypeError."""
         # Force: no security prefix, headline_inner returns None, review_suffix non-empty
         # stagnation + review issues + conditions that make headline_inner return None
-        result = _compute_headline(
+        result = compute_headline(
             "stagnation",
             {},
             {},
@@ -702,7 +709,7 @@ class TestHeadlineBugFix:
 
     def test_headline_review_only_no_security_no_inner(self):
         """When only review_suffix exists, returns it cleanly."""
-        result = _compute_headline(
+        result = compute_headline(
             "stagnation",
             {},
             {},

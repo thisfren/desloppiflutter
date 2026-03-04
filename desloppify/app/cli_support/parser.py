@@ -25,7 +25,7 @@ from desloppify.app.cli_support.parser_groups import (
     _add_viz_parser,
     _add_zone_parser,
 )
-from desloppify.app.cli_support.parser_groups_plan import _add_plan_parser
+from desloppify.app.cli_support.parser_groups_plan import add_plan_parser
 
 USAGE_EXAMPLES = """
 workflow:
@@ -121,7 +121,7 @@ def create_parser(*, langs: list[str], detector_names: list[str]) -> argparse.Ar
     _add_scan_parser(sub)
     _add_status_parser(sub)
     _add_next_parser(sub)
-    _add_plan_parser(sub)
+    add_plan_parser(sub)
     # investigate
     _add_show_parser(sub)
     _add_tree_parser(sub)

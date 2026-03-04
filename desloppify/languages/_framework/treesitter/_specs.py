@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from desloppify.languages._framework.treesitter import TreeSitterLangSpec
 
-from ._imports import (
+from ._import_resolvers import (
     resolve_bash_source,
     resolve_csharp_import,
     resolve_cxx_include,

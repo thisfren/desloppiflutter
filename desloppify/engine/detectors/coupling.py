@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.fallbacks import log_best_effort_failure
 from desloppify.base.discovery.file_paths import count_lines, resolve_scan_file
 

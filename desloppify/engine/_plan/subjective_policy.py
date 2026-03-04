@@ -16,7 +16,6 @@ from desloppify.engine._state.schema import StateModel
 from desloppify.engine.planning.helpers import CONFIDENCE_ORDER
 
 # Detectors whose issues are NOT objective mechanical work.
-# Canonical definition — re-exported by stale_dimensions for back-compat.
 NON_OBJECTIVE_DETECTORS: frozenset[str] = frozenset({
     "review", "concerns", "subjective_review", "subjective_assessment",
 })
@@ -94,12 +93,11 @@ def compute_subjective_visibility(
     to disable scope filtering.  When *plan* is set, issues whose IDs
     appear in ``plan["skipped"]`` are excluded.
 
-    Imports building-block helpers from ``stale_dimensions`` so the
-    source-of-truth logic stays in one place.
+    Imports policy helpers from ``stale_policy`` so this module remains
+    side-effect free and cycle-safe.
     """
-    # cycle-break: subjective_policy.py ↔ stale_dimensions.py
-    from desloppify.engine._plan.stale_dimensions import (
-        _current_stale_ids,
+    from desloppify.engine._plan.stale_policy import (
+        current_stale_ids,
         current_under_target_ids,
         current_unscored_ids,
     )
@@ -130,7 +128,7 @@ def compute_subjective_visibility(
     )
 
     unscored = current_unscored_ids(state)
-    stale = _current_stale_ids(state)
+    stale = current_stale_ids(state)
     under_target = current_under_target_ids(state, target_strict=target_strict)
 
     return SubjectiveVisibility(

@@ -8,7 +8,7 @@ from desloppify.engine._state.filtering import (
     remove_ignored_issues,
 )
 from desloppify.engine._state.merge_issues import upsert_issues
-from desloppify.engine._state.scoring import _count_issues
+from desloppify.engine._scoring.state_integration import _count_issues
 
 # ---------------------------------------------------------------------------
 # Helpers

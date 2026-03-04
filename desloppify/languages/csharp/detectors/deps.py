@@ -11,7 +11,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
-from desloppify.base.discovery.api import resolve_path
+from desloppify.base.discovery.file_paths import resolve_path
 from desloppify.engine.detectors.graph import finalize_graph
 from desloppify.languages.csharp.detectors.deps_support import (
     build_graph_from_edge_map as _build_graph_from_edge_map,

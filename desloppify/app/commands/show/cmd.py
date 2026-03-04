@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 
 from desloppify.app.commands.helpers.guardrails import print_triage_guardrail_info
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.query import write_query
 from desloppify.app.commands.helpers.runtime import command_runtime
-from desloppify.base.config import target_strict_score_from_config
 from desloppify.app.commands.helpers.state import require_completed_scan
+from desloppify.app.skill_docs import check_skill_version
+from desloppify.base.config import target_strict_score_from_config
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
 from desloppify.base.output.terminal import colorize
-from desloppify.app.skill_docs import check_skill_version
 from desloppify.base.tooling import check_config_staleness
 from desloppify.engine.plan import load_plan
 from desloppify.intelligence.narrative import NarrativeContext, compute_narrative
@@ -33,6 +34,29 @@ from .render import (
     write_show_output_file,
 )
 from .scope import load_matches, resolve_entity, resolve_noise, resolve_show_scope
+
+
+@dataclass(frozen=True)
+class ShowOptions:
+    """All user-facing show command options extracted once from argparse."""
+
+    pattern_raw: str = ""
+    show_code: bool = False
+    chronic: bool = False
+    no_budget: bool = False
+    output_file: str | None = None
+    top: int = 20
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ShowOptions:
+        return cls(
+            pattern_raw=str(getattr(args, "pattern", "") or ""),
+            show_code=bool(getattr(args, "code", False)),
+            chronic=bool(getattr(args, "chronic", False)),
+            no_budget=bool(getattr(args, "no_budget", False)),
+            output_file=getattr(args, "output", None),
+            top=int(getattr(args, "top", 20) or 20),
+        )
 
 
 def _handle_special_entity_views(
@@ -100,9 +124,8 @@ def cmd_show(args: argparse.Namespace) -> None:
 
     print_triage_guardrail_info(state=state)
 
-    pattern_raw = getattr(args, "pattern", "")
-    show_code = getattr(args, "code", False)
-    chronic = getattr(args, "chronic", False)
+    opts = ShowOptions.from_args(args)
+
     ok, pattern, status_filter, scope = resolve_show_scope(args)
     if not ok or pattern is None:
         return
@@ -120,7 +143,7 @@ def cmd_show(args: argparse.Namespace) -> None:
         state=state,
         config=config,
         lang_name=lang_name,
-        pattern_raw=pattern_raw,
+        pattern_raw=opts.pattern_raw,
     ):
         return
 
@@ -130,7 +153,7 @@ def cmd_show(args: argparse.Namespace) -> None:
         pattern=pattern,
         status_filter=status_filter,
         scope=scope,
-        chronic=chronic,
+        chronic=opts.chronic,
     )
     if match_result is None:
         return
@@ -140,7 +163,6 @@ def cmd_show(args: argparse.Namespace) -> None:
         _render_no_matches(entity, pattern, status_filter, narrative, state, config)
         return
 
-    no_budget = getattr(args, "no_budget", False)
     (
         surfaced_matches,
         hidden_by_detector,
@@ -150,7 +172,7 @@ def cmd_show(args: argparse.Namespace) -> None:
     ) = resolve_noise(
         config,
         matches,
-        no_budget=no_budget,
+        no_budget=opts.no_budget,
     )
     hidden_total = sum(hidden_by_detector.values())
 
@@ -167,19 +189,17 @@ def cmd_show(args: argparse.Namespace) -> None:
     )
     write_query({"command": "show", **payload, "narrative": narrative})
 
-    output_file = getattr(args, "output", None)
-    if output_file:
-        if write_show_output_file(output_file, payload, len(surfaced_matches)):
+    if opts.output_file:
+        if write_show_output_file(opts.output_file, payload, len(surfaced_matches)):
             return
         raise SystemExit(1)
 
-    top = getattr(args, "top", 20) or 20
     render_issues(
         surfaced_matches,
         pattern=pattern,
         status_filter=status_filter,
-        show_code=show_code,
-        top=top,
+        show_code=opts.show_code,
+        top=opts.top,
         hidden_by_detector=hidden_by_detector,
         hidden_total=hidden_total,
         noise_budget=noise_budget,

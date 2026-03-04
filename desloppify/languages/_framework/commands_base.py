@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize, display_entries, print_table
 from desloppify.engine.detectors import complexity as complexity_detector
 from desloppify.engine.detectors import large as large_detector

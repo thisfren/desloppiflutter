@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, NotRequired, Required, TypedDict
+from typing import Any, NotRequired, Required, TypedDict, cast
 
 from desloppify.base.enums import Status, canonical_issue_status, issue_status_tokens
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine._state.schema_scores import (
     json_default,
 )
@@ -14,13 +14,20 @@ from desloppify.languages._framework.base.types import ScanCoverageRecord
 
 __all__ = [
     "ConcernDismissal",
+    "AssessmentImportAuditEntry",
+    "AttestationLogEntry",
     "Issue",
     "TierStats",
     "StateStats",
     "DimensionScore",
+    "ScoreConfidenceDetector",
+    "ScoreConfidenceModel",
     "ScanHistoryEntry",
     "SubjectiveAssessment",
     "SubjectiveIntegrity",
+    "LangCapability",
+    "ReviewCacheModel",
+    "IgnoreIntegrityModel",
     "StateModel",
     "ScanDiff",
     "STATE_DIR",
@@ -109,10 +116,38 @@ class StateStats(TypedDict, total=False):
 class DimensionScore(TypedDict, total=False):
     score: float
     strict: float
+    strict_score: float
+    verified_strict_score: float
     checks: int
     failing: int
     tier: int
+    carried_forward: bool
     detectors: dict[str, Any]
+    coverage_status: str
+    coverage_confidence: float
+    coverage_impacts: list[dict[str, Any]]
+
+
+class ScoreConfidenceDetector(TypedDict, total=False):
+    """Detector-level confidence details persisted after each scan."""
+
+    detector: str
+    status: str
+    confidence: float
+    summary: str
+    impact: str
+    remediation: str
+    tool: str
+    reason: str
+
+
+class ScoreConfidenceModel(TypedDict, total=False):
+    """State-level score confidence summary."""
+
+    status: str
+    confidence: float
+    detectors: list[ScoreConfidenceDetector]
+    dimensions: list[str]
 
 
 class ScanHistoryEntry(TypedDict, total=False):
@@ -131,7 +166,7 @@ class ScanHistoryEntry(TypedDict, total=False):
     ignore_patterns: int
     subjective_integrity: dict[str, Any] | None
     dimension_scores: dict[str, dict[str, float]] | None
-    score_confidence: dict[str, Any] | None
+    score_confidence: ScoreConfidenceModel | None
 
 
 class SubjectiveIntegrity(TypedDict, total=False):
@@ -148,6 +183,12 @@ class SubjectiveAssessment(TypedDict, total=False):
     """A single subjective dimension assessment payload."""
 
     score: float
+    source: str
+    assessed_at: str
+    reset_by: str
+    placeholder: bool
+    components: list[str]
+    component_scores: dict[str, float]
     integrity_penalty: str | None
     provisional_override: bool
     provisional_until_scan: int
@@ -162,6 +203,58 @@ class ConcernDismissal(TypedDict, total=False):
     dismissed_at: str
     reason: str | None
     dimension: str
+    reasoning: str
+    concern_type: str
+    concern_file: str
+    source_issue_ids: list[str]
+
+
+class AssessmentImportAuditEntry(TypedDict, total=False):
+    """Typed record for review assessment import events."""
+
+    timestamp: str
+    mode: str
+    trusted: bool
+    reason: str
+    override_used: bool
+    attested_external: bool
+    provisional: bool
+    provisional_count: int
+    attest: str
+    import_file: str
+
+
+class AttestationLogEntry(TypedDict, total=False):
+    """Typed entry for resolve/suppress attestation history."""
+
+    timestamp: str | None
+    command: str
+    pattern: str
+    attestation: str | None
+    affected: int
+
+
+class LangCapability(TypedDict, total=False):
+    """Capabilities reported for a language runtime."""
+
+    fixers: list[str]
+    typecheck_cmd: str
+
+
+class ReviewCacheModel(TypedDict, total=False):
+    """Cached review metadata keyed by relative file path."""
+
+    files: dict[str, dict[str, Any]]
+    holistic: dict[str, Any]
+
+
+class IgnoreIntegrityModel(TypedDict, total=False):
+    """Ignore/suppression integrity summary used by reporting surfaces."""
+
+    ignored: int
+    suppressed_pct: float
+    ignore_patterns: int
+    raw_issues: int
 
 
 class StateModel(TypedDict, total=False):
@@ -175,12 +268,29 @@ class StateModel(TypedDict, total=False):
     verified_strict_score: Required[float]
     stats: Required[StateStats]
     issues: Required[dict[str, Issue]]
+    dimension_scores: dict[str, DimensionScore]
+    scan_path: str | None
+    tool_hash: str
+    scan_completeness: dict[str, str]
+    potentials: dict[str, dict[str, int]]
+    codebase_metrics: dict[str, dict[str, Any]]
     scan_coverage: dict[str, ScanCoverageRecord]
-    score_confidence: dict[str, Any]
+    score_confidence: ScoreConfidenceModel
     scan_history: list[ScanHistoryEntry]
+    lang_capabilities: dict[str, LangCapability]
+    zone_distribution: dict[str, int]
+    review_cache: ReviewCacheModel
+    reminder_history: dict[str, int]
+    ignore_integrity: IgnoreIntegrityModel
+    config: dict[str, Any]
+    lang: str
     subjective_integrity: Required[SubjectiveIntegrity]
     subjective_assessments: Required[dict[str, SubjectiveAssessment]]
+    custom_review_dimensions: list[str]
+    assessment_import_audit: list[AssessmentImportAuditEntry]
+    attestation_log: list[AttestationLogEntry]
     concern_dismissals: dict[str, ConcernDismissal]
+    _plan_start_scores_for_reveal: dict[str, Any]
 
 
 class ScanDiff(TypedDict):
@@ -245,19 +355,20 @@ def _rename_key(d: dict, old: str, new: str) -> bool:
     return True
 
 
-def migrate_state_keys(state: dict) -> None:
+def migrate_state_keys(state: StateModel | dict[str, Any]) -> None:
     """Migrate legacy key names in-place.
 
     - ``"findings"`` → ``"issues"``
     - ``dimension_scores[dim]["issues"]`` → ``"failing"``
     """
-    _rename_key(state, "findings", "issues")
+    state_dict = cast(dict[str, Any], state)
+    _rename_key(state_dict, "findings", "issues")
 
-    for ds in state.get("dimension_scores", {}).values():
+    for ds in state_dict.get("dimension_scores", {}).values():
         if isinstance(ds, dict):
             _rename_key(ds, "issues", "failing")
 
-    for entry in state.get("scan_history", []):
+    for entry in state_dict.get("scan_history", []):
         if not isinstance(entry, dict):
             continue
         _rename_key(entry, "raw_findings", "raw_issues")
@@ -270,8 +381,9 @@ def ensure_state_defaults(state: StateModel | dict) -> None:
     """Normalize loose/legacy state payloads to a valid base shape in-place."""
     migrate_state_keys(state)
 
+    mutable_state = cast(dict[str, Any], state)
     for key, value in empty_state().items():
-        state.setdefault(key, value)
+        mutable_state.setdefault(key, value)
 
     if not isinstance(state.get("issues"), dict):
         state["issues"] = {}

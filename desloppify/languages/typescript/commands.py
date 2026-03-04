@@ -8,7 +8,9 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from desloppify.base.discovery.api import find_ts_files, rel
+from desloppify.base.discovery.file_paths import rel
+
+from desloppify.base.discovery.source import find_ts_files
 from desloppify.base.output.terminal import (
     colorize,
     display_entries,

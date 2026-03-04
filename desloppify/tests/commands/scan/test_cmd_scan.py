@@ -9,19 +9,23 @@ import desloppify.app.commands.scan.cmd as scan_cmd_mod
 import desloppify.app.commands.scan.preflight as scan_preflight_mod
 import desloppify.intelligence.narrative as narrative_mod
 import desloppify.languages as lang_mod
-from desloppify.app.commands.scan.cmd import (
+from desloppify.app.commands.scan.helpers import (
     _audit_excluded_dirs,
     _collect_codebase_metrics,
     _effective_include_slow,
     _resolve_scan_profile,
     _warn_explicit_lang_with_no_files,
-    cmd_scan,
     format_delta,
+)
+from desloppify.app.commands.scan.reporting.summary import (
+    show_strict_target_progress,
+)
+from desloppify.app.commands.scan.cmd import (
+    cmd_scan,
     show_diff_summary,
     show_dimension_deltas,
     show_post_scan_analysis,
     show_score_delta,
-    show_strict_target_progress,
 )
 from desloppify.engine._scoring.policy.core import DIMENSIONS
 

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 
 from desloppify.base.config import DEFAULT_TARGET_STRICT_SCORE
-from desloppify.base.registry import DETECTORS, DetectorMeta
+from desloppify.base.registry import DETECTORS
+from desloppify.engine._plan.cluster_strategy import (
+    cluster_name_from_key as _cluster_name_from_key,
+    generate_action as _generate_action,
+    generate_description as _generate_description,
+    grouping_key as _grouping_key,
+    strip_guidance_examples as _strip_guidance_examples,
+)
 from desloppify.engine._plan.schema import Cluster, PlanModel, ensure_plan_defaults
 from desloppify.engine._plan.stale_dimensions import (
     SUBJECTIVE_PREFIX,
@@ -29,200 +35,6 @@ _UNSCORED_NAME = "auto/initial-review"
 _UNDER_TARGET_KEY = "subjective::under-target"
 _UNDER_TARGET_NAME = "auto/under-target-review"
 _MIN_UNSCORED_CLUSTER_SIZE = 1
-
-
-# ---------------------------------------------------------------------------
-# Grouping key computation
-# ---------------------------------------------------------------------------
-
-def _extract_subtype(issue: dict) -> str | None:
-    """Extract the subtype/kind from a issue.
-
-    Checks detail.kind first, then falls back to parsing the issue ID
-    (format: ``detector::file::subtype`` or ``detector::file::symbol::subtype``).
-    """
-    detail = issue.get("detail") or {}
-    kind = detail.get("kind")
-    if kind:
-        return kind
-
-    # Parse from issue ID — third segment is often the subtype
-    fid = issue.get("id", "")
-    parts = fid.split("::")
-    if len(parts) >= 3:
-        # For IDs like smells::file.py::silent_except, the subtype is parts[2]
-        # For IDs like dict_keys::file.py::key::phantom_read, subtype is last part
-        candidate = parts[-1]
-        # Skip if it looks like a file path or symbol name (contains / or .)
-        if "/" not in candidate and "." not in candidate:
-            return candidate
-    return None
-
-
-def _grouping_key(issue: dict, meta: DetectorMeta | None) -> str | None:
-    """Compute a deterministic grouping key for a issue.
-
-    Returns None if the issue should not be auto-clustered.
-    """
-    detector = issue.get("detector", "")
-
-    if meta is None:
-        # Unknown detector — group by detector name
-        return f"detector::{detector}"
-
-    # Review issues → group by dimension
-    if detector in ("review", "subjective_review"):
-        detail = issue.get("detail") or {}
-        dimension = detail.get("dimension", "")
-        if dimension:
-            return f"review::{dimension}"
-        return f"detector::{detector}"
-
-    # Per-file detectors (structural, responsibility_cohesion)
-    if meta.needs_judgment and detector in (
-        "structural", "responsibility_cohesion",
-    ):
-        file = issue.get("file", "")
-        if file:
-            basename = os.path.basename(file)
-            return f"file::{detector}::{basename}"
-
-    # Needs-judgment detectors — group by subtype when available
-    if meta.needs_judgment:
-        subtype = _extract_subtype(issue)
-        if subtype:
-            return f"typed::{detector}::{subtype}"
-
-    # Pure auto-fix (no judgment needed) → all issues by detector
-    if meta.action_type == "auto_fix" and not meta.needs_judgment:
-        return f"auto::{detector}"
-
-    # Everything else → by detector
-    return f"detector::{detector}"
-
-
-def _cluster_name_from_key(key: str) -> str:
-    """Convert a grouping key to a cluster name with auto/ prefix."""
-    # auto::unused → auto/unused
-    # typed::dict_keys::phantom_read → auto/dict_keys-phantom_read
-    # file::structural::big_file.py → auto/structural-big_file.py
-    # review::abstraction_fitness → auto/review-abstraction_fitness
-    # detector::security → auto/security
-    parts = key.split("::")
-    if len(parts) == 2:
-        prefix_type = parts[0]
-        # For review keys, keep the prefix for clarity
-        if prefix_type == "review":
-            return f"{AUTO_PREFIX}review-{parts[1]}"
-        return f"{AUTO_PREFIX}{parts[1]}"
-    if len(parts) == 3:
-        return f"{AUTO_PREFIX}{parts[1]}-{parts[2]}"
-    return f"{AUTO_PREFIX}{key.replace('::', '-')}"
-
-
-# ---------------------------------------------------------------------------
-# Description and action generation
-# ---------------------------------------------------------------------------
-
-def _generate_description(
-    cluster_name: str,
-    members: list[dict],
-    meta: DetectorMeta | None,
-    subtype: str | None,
-) -> str:
-    """Generate a human-readable cluster description."""
-    count = len(members)
-    detector = members[0].get("detector", "") if members else ""
-
-    if detector in ("review", "subjective_review"):
-        detail = (members[0].get("detail") or {}) if members else {}
-        dimension = detail.get("dimension", detector)
-        return f"Address {count} {dimension} review issues"
-
-    if detector == "structural":
-        files = {os.path.basename(m.get("file", "")) for m in members}
-        if len(files) == 1:
-            return f"Decompose {next(iter(files))}"
-        return f"Decompose {count} large files"
-
-    display = meta.display if meta else detector
-    if subtype:
-        label = subtype.replace("_", " ")
-        return f"Fix {count} {label} issues"
-
-    if meta and meta.action_type == "auto_fix" and not meta.needs_judgment:
-        return f"Remove {count} {display} issues"
-
-    return f"Fix {count} {display} issues"
-
-
-def _subtype_has_fixer(meta: DetectorMeta, subtype: str | None) -> str | None:
-    """Check if a subtype maps to a specific fixer."""
-    if not meta.fixers or not subtype:
-        return None
-    # Convention: fixer name is subtype with _ replaced by -
-    fixer_name = subtype.replace("_", "-")
-    if fixer_name in meta.fixers:
-        return fixer_name
-    # Also check if subtype is a substring (e.g. "unused" matches "unused-imports")
-    for fixer in meta.fixers:
-        if subtype in fixer:
-            return fixer
-    return None
-
-
-def _strip_guidance_examples(guidance: str) -> str:
-    """Strip subtype-specific examples from guidance text.
-
-    Many guidance strings have format "verb — specific examples".
-    Strip after the dash to get the core action:
-      "fix code smells — dead useEffect, empty if chains" → "fix code smells"
-    """
-    if " — " in guidance:
-        return guidance.split(" — ", 1)[0].strip()
-    return guidance
-
-
-_ACTION_TYPE_TEMPLATES: dict[str, str] = {
-    "reorganize": "reorganize with desloppify move",
-    "refactor": "review and refactor each issue",
-    "manual_fix": "review and fix each issue",
-}
-
-
-def _generate_action(
-    meta: DetectorMeta | None,
-    subtype: str | None,
-) -> str:
-    """Generate an action string from detector metadata.
-
-    Always returns a non-empty string — every cluster gets an action.
-    """
-    if meta is None:
-        return "review and fix each issue"
-
-    # For detectors with subtypes, only suggest a fixer if the subtype matches
-    if subtype and meta.fixers:
-        matched_fixer = _subtype_has_fixer(meta, subtype)
-        if matched_fixer:
-            return f"desloppify autofix {matched_fixer} --dry-run"
-    elif meta.action_type == "auto_fix" and meta.fixers and not meta.needs_judgment:
-        # Pure auto-fix detector, no subtypes
-        return f"desloppify autofix {meta.fixers[0]} --dry-run"
-
-    if meta.tool == "move":
-        return "desloppify move"
-
-    # Guidance available — use it (strip examples for subtyped detectors)
-    if meta.guidance:
-        if subtype:
-            return _strip_guidance_examples(meta.guidance)
-        return meta.guidance
-
-    # Final fallback: action_type template
-    return _ACTION_TYPE_TEMPLATES.get(
-        meta.action_type, "review and fix each issue"
-    )
 
 
 # ---------------------------------------------------------------------------

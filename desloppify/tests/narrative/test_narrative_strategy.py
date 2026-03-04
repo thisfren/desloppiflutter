@@ -8,7 +8,7 @@ from desloppify.intelligence.narrative.dimensions import (
     _analyze_debt,
     _analyze_dimensions,
 )
-from desloppify.intelligence.narrative.phase import _detect_milestone, _detect_phase
+from desloppify.intelligence.narrative.phase import detect_milestone, detect_phase
 from desloppify.intelligence.narrative.strategy_engine import (
     compute_fixer_leverage as _compute_fixer_leverage,
 )
@@ -157,10 +157,10 @@ class TestAnalyzeDebt:
 
 class TestDetectPhase:
     def test_first_scan_empty(self):
-        assert _detect_phase([], None) == "first_scan"
+        assert detect_phase([], None) == "first_scan"
 
     def test_first_scan_single(self):
-        assert _detect_phase([{"strict_score": 80}], 80) == "first_scan"
+        assert detect_phase([{"strict_score": 80}], 80) == "first_scan"
 
     def test_early_momentum(self):
         history = [
@@ -168,7 +168,7 @@ class TestDetectPhase:
             {"strict_score": 75},
             {"strict_score": 80},
         ]
-        result = _detect_phase(history, 80)
+        result = detect_phase(history, 80)
         assert result in (
             "early_momentum",
             "steady_progress",
@@ -179,7 +179,7 @@ class TestDetectPhase:
 
 class TestDetectMilestone:
     def test_no_history(self, empty_state):
-        result = _detect_milestone(empty_state, None, [])
+        result = detect_milestone(empty_state, None, [])
         assert result is None
 
     def test_with_history(self, empty_state):
@@ -188,5 +188,5 @@ class TestDetectMilestone:
             {"strict_score": 70},
             {"strict_score": 80},
         ]
-        result = _detect_milestone(empty_state, None, history)
+        result = detect_milestone(empty_state, None, history)
         assert result is None or isinstance(result, str)

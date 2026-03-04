@@ -9,7 +9,7 @@ from typing import Any
 from desloppify.base.coercions import coerce_confidence
 from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import log
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine.detectors.base import ComplexitySignal
 from desloppify.engine.detectors.complexity import detect_complexity
 from desloppify.engine.detectors.dupes import detect_duplicates

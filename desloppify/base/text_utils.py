@@ -2,24 +2,7 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-
-from desloppify.base.runtime_state import current_runtime_context
-
-_DEFAULT_PROJECT_ROOT = Path(os.environ.get("DESLOPPIFY_ROOT", Path.cwd())).resolve()
-
-
-def get_project_root() -> Path:
-    """Return the active project root, checking RuntimeContext first.
-
-    Tests set ``RuntimeContext.project_root`` to point at a tmp directory.
-    Production code uses the process-level default from $DESLOPPIFY_ROOT / cwd.
-    """
-    override = current_runtime_context().project_root
-    if override is not None:
-        return override
-    return _DEFAULT_PROJECT_ROOT
 
 
 def read_code_snippet(
@@ -31,6 +14,9 @@ def read_code_snippet(
 ) -> str | None:
     """Read ±context lines around a line number. Returns formatted string or None."""
     try:
+        # Local import avoids circular dependency: discovery.paths wraps this helper.
+        from desloppify.base.discovery.paths import get_project_root
+
         root = (
             Path(project_root).resolve()
             if project_root is not None
@@ -57,24 +43,6 @@ def read_code_snippet(
             text = text[:117] + "..."
         parts.append(f"    {marker} {ln:>4} │ {text}")
     return "\n".join(parts)
-
-
-def get_area(filepath: str, *, min_depth: int = 2) -> str:
-    """Derive an area name from a file path (generic: first 2 path components).
-
-    *min_depth* controls the minimum number of path components required before
-    the two-component area is returned.  The default (2) means a path like
-    ``"a/b"`` already qualifies.  Python uses ``min_depth=3`` so that
-    ``"pkg/mod.py"`` returns just ``"pkg"`` while ``"pkg/sub/mod.py"`` returns
-    ``"pkg/sub"``.
-    """
-    text = (filepath or "").strip()
-    if not text:
-        return "(unknown)"
-    parts = Path(text).parts
-    if not parts:
-        return "(unknown)"
-    return "/".join(parts[:2]) if len(parts) >= min_depth else parts[0]
 
 
 def _consume_escaped_char(text: str, index: int, out: list[str]) -> int | None:
@@ -144,8 +112,6 @@ def is_numeric(value: object) -> bool:
 
 
 __all__ = [
-    "get_area",
-    "get_project_root",
     "is_numeric",
     "read_code_snippet",
     "strip_c_style_comments",

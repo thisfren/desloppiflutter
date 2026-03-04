@@ -7,7 +7,7 @@ from desloppify.app.commands.move.planning import (
     DirectoryMovePlan,
     summarize_directory_plan,
 )
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize
 
 

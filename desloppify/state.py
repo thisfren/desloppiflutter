@@ -50,10 +50,10 @@ from desloppify.engine._state.schema import (
     validate_state_invariants,
 )
 from desloppify.engine._state.schema_scores import (
-    _get_objective_score,
-    _get_overall_score,
-    _get_strict_score,
-    _get_verified_strict_score,
+    get_objective_score,
+    get_overall_score,
+    get_strict_score,
+    get_verified_strict_score,
 )
 from desloppify.engine._state.scoring import (
     suppression_metrics,
@@ -72,10 +72,10 @@ class ScoreSnapshot(NamedTuple):
 def score_snapshot(state: StateModel) -> ScoreSnapshot:
     """Load all four canonical scores from *state* in one call."""
     return ScoreSnapshot(
-        overall=_get_overall_score(state),
-        objective=_get_objective_score(state),
-        strict=_get_strict_score(state),
-        verified=_get_verified_strict_score(state),
+        overall=get_overall_score(state),
+        objective=get_objective_score(state),
+        strict=get_strict_score(state),
+        verified=get_verified_strict_score(state),
     )
 
 

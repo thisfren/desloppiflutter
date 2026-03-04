@@ -10,7 +10,13 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
-from desloppify.base.discovery.api import rel, resolve_path
+from desloppify.base.discovery.file_paths import (
+
+    rel,
+
+    resolve_path,
+
+)
 from desloppify.base.output.terminal import colorize, print_table
 from desloppify.engine.detectors.graph import (
     detect_cycles,

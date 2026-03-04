@@ -5,7 +5,7 @@ from __future__ import annotations
 from desloppify.engine._state.schema import StateModel
 
 
-def _review_file_cache(state: StateModel) -> dict:
+def review_file_cache(state: StateModel) -> dict:
     """Access ``state["review_cache"]["files"]``, creating if absent."""
     return state.setdefault("review_cache", {}).setdefault("files", {})
 

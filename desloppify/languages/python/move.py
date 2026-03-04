@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from desloppify.base.output.fallbacks import log_best_effort_failure
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 
 VERIFY_HINT = ""
 logger = logging.getLogger(__name__)

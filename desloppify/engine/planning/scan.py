@@ -8,7 +8,7 @@ from pathlib import Path
 
 from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.engine.planning.helpers import is_subjective_phase
 from desloppify.engine.policy.zones import ZONE_POLICIES, FileZoneMap
 from desloppify.languages import auto_detect_lang, available_langs, get_lang

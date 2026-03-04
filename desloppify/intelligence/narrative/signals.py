@@ -12,7 +12,7 @@ from desloppify.base.config import (
 from desloppify.base.config import (
     load_config as _load_config,
 )
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 from desloppify.intelligence.narrative._constants import STRUCTURAL_MERGE
 from desloppify.intelligence.narrative.types import (
     BadgeStatus,

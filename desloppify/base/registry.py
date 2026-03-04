@@ -56,6 +56,8 @@ class DetectorMeta:
     structural: bool = False  # Merges under "structural" in display
     needs_judgment: bool = False  # Issues need LLM design judgment (vs clear-cut fixes)
     standalone_threshold: str | None = None  # Min confidence for standalone queue item
+    tier: int = 2  # T1-T4 scoring weight
+    marks_dims_stale: bool = False  # Mechanical changes should stale subjective dimensions
 
 
 DETECTORS: dict[str, DetectorMeta] = {
@@ -67,6 +69,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "auto_fix",
         "remove unused imports and variables",
         fixers=("unused-imports", "unused-vars", "unused-params"),
+        tier=3,
     ),
     "logs": DetectorMeta(
         "logs",
@@ -75,6 +78,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "auto_fix",
         "remove debug logs",
         fixers=("debug-logs",),
+        tier=3,
     ),
     "exports": DetectorMeta(
         "exports",
@@ -82,6 +86,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Code quality",
         "manual_fix",
         "run `knip --fix` to remove dead exports",
+        tier=3,
     ),
     "smells": DetectorMeta(
         "smells",
@@ -92,6 +97,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         fixers=("dead-useeffect", "empty-if-chain"),
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
+        marks_dims_stale=True,
     ),
     # ── Reorganize (move tool) ────────────────────────────
     "orphaned": DetectorMeta(
@@ -102,6 +109,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "delete dead files or relocate with `desloppify move`",
         tool="move",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "uncalled_functions": DetectorMeta(
         "uncalled_functions",
@@ -110,6 +119,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor",
         "remove dead functions or document why they're retained",
         needs_judgment=True,
+        marks_dims_stale=True,
     ),
     "unused_enums": DetectorMeta(
         "unused_enums",
@@ -126,6 +136,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "create subdirectories and use `desloppify move`",
         tool="move",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "naming": DetectorMeta(
         "naming",
@@ -136,6 +148,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         tool="move",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
+        marks_dims_stale=True,
     ),
     "single_use": DetectorMeta(
         "single_use",
@@ -145,6 +159,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "inline or relocate with `desloppify move`",
         tool="move",
         needs_judgment=True,
+        tier=3,
     ),
     "coupling": DetectorMeta(
         "coupling",
@@ -154,6 +169,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "fix boundary violations with `desloppify move`",
         tool="move",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "cycles": DetectorMeta(
         "cycles",
@@ -163,6 +180,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "break cycles by extracting shared code or using `desloppify move`",
         tool="move",
         needs_judgment=True,
+        tier=4,
+        marks_dims_stale=True,
     ),
     "facade": DetectorMeta(
         "facade",
@@ -172,6 +191,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "flatten re-export facades or consolidate barrel files",
         tool="move",
         needs_judgment=True,
+        tier=3,
     ),
     # ── Refactor ──────────────────────────────────────────
     "structural": DetectorMeta(
@@ -181,6 +201,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor",
         "decompose large files — extract logic into focused modules",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "props": DetectorMeta(
         "props",
@@ -190,6 +212,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "split bloated components, extract sub-components",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
     ),
     "react": DetectorMeta(
         "react",
@@ -199,6 +222,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor React antipatterns (state sync, provider nesting, hook bloat)",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
     ),
     "dupes": DetectorMeta(
         "dupes",
@@ -208,6 +232,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "extract shared utility or consolidate duplicates",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
+        marks_dims_stale=True,
     ),
     "patterns": DetectorMeta(
         "patterns",
@@ -217,6 +243,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "align to single pattern across the codebase",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
     ),
     "dict_keys": DetectorMeta(
         "dict_keys",
@@ -227,6 +254,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "schema drift suggests a typo or missed rename",
         needs_judgment=True,
         standalone_threshold="medium",
+        tier=3,
     ),
     "test_coverage": DetectorMeta(
         "test_coverage",
@@ -234,6 +262,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Test health",
         "refactor",
         "add tests for untested production modules — prioritize by import count",
+        tier=4,
     ),
     "signature": DetectorMeta(
         "signature",
@@ -250,6 +279,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "manual_fix",
         "refactor module-level mutable state — use explicit init functions or dependency injection",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "private_imports": DetectorMeta(
         "private_imports",
@@ -258,6 +289,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "manual_fix",
         "stop importing private symbols across module boundaries",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "layer_violation": DetectorMeta(
         "layer_violation",
@@ -266,6 +299,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "manual_fix",
         "fix architectural layer violations — move shared code to the correct layer",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "responsibility_cohesion": DetectorMeta(
         "responsibility_cohesion",
@@ -274,6 +309,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor",
         "split modules with too many responsibilities — extract focused sub-modules",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "boilerplate_duplication": DetectorMeta(
         "boilerplate_duplication",
@@ -282,6 +319,8 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor",
         "extract shared boilerplate into reusable helpers or base classes",
         needs_judgment=True,
+        tier=3,
+        marks_dims_stale=True,
     ),
     "stale_wontfix": DetectorMeta(
         "stale_wontfix",
@@ -304,6 +343,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Code quality",
         "manual_fix",
         "remove deprecated symbols or migrate callers",
+        tier=3,
     ),
     "stale_exclude": DetectorMeta(
         "stale_exclude",
@@ -311,6 +351,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Code quality",
         "manual_fix",
         "remove stale exclusion or verify it's still needed",
+        tier=3,
     ),
     "security": DetectorMeta(
         "security",
@@ -318,6 +359,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Security",
         "manual_fix",
         "review and fix security issues — prioritize by severity",
+        tier=4,
     ),
     # ── Subjective review ────────────────────────────────────
     "review": DetectorMeta(
@@ -333,6 +375,7 @@ DETECTORS: dict[str, DetectorMeta] = {
         "Test health",
         "manual_fix",
         "run `desloppify review --prepare` to evaluate files against quality dimensions",
+        tier=4,
     ),
 }
 

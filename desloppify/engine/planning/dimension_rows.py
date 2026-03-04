@@ -1,7 +1,7 @@
 """Scorecard dimension row helpers for the engine/planning layer.
 
 Provides ``scorecard_dimension_rows`` without importing app-layer modules.
-The app scorecard surface re-exports this so external call-sites are unaffected.
+App-layer scorecard renderers import this to keep dependency direction clean.
 """
 
 from __future__ import annotations

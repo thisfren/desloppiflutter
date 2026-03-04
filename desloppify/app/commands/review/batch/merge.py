@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import cast
 
 from desloppify.intelligence.review.feedback_contract import (
     REVIEW_QUALITY_HIGH_SCORE_MISSING_ISSUES_KEY,
@@ -15,6 +15,9 @@ from desloppify.intelligence.review.issue_merge import (
 )
 
 from .core import (
+    BatchDimensionNotePayload,
+    BatchIssuePayload,
+    BatchResultPayload,
     _accumulate_batch_quality,
     _accumulate_batch_scores,
     _compute_abstraction_components,
@@ -25,14 +28,20 @@ from .core import (
 )
 
 
-def _merge_issue_payload(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+def _merge_issue_payload(
+    existing: BatchIssuePayload,
+    incoming: BatchIssuePayload,
+) -> None:
     merge_list_fields(existing, incoming, ("related_files", "evidence"))
     pick_longer_text(existing, incoming, "summary")
     pick_longer_text(existing, incoming, "suggestion")
     track_merged_from(existing, str(incoming.get("identifier", "")).strip())
 
 
-def _should_merge_issues(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+def _should_merge_issues(
+    existing: BatchIssuePayload,
+    incoming: BatchIssuePayload,
+) -> bool:
     existing_summary = normalize_word_set(str(existing.get("summary", "")))
     incoming_summary = normalize_word_set(str(incoming.get("summary", "")))
     summary_similarity_signal = False
@@ -62,15 +71,15 @@ def _should_merge_issues(existing: dict[str, Any], incoming: dict[str, Any]) -> 
 
 
 def _append_batch_issues(
-    result: dict[str, Any],
-    issues: list[dict[str, Any]],
+    result: BatchResultPayload,
+    issues: list[BatchIssuePayload],
 ) -> None:
     for issue in result.get("issues", []):
         if isinstance(issue, dict):
-            issues.append(issue)
+            issues.append(cast(BatchIssuePayload, issue))
 
 
-def _merge_issue_group(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _merge_issue_group(group: list[BatchIssuePayload]) -> list[BatchIssuePayload]:
     """Merge one dedupe-key group using transitive connected components."""
     if len(group) <= 1:
         return list(group)
@@ -99,7 +108,7 @@ def _merge_issue_group(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     stack.append(probe)
         components.append(sorted(component))
 
-    merged_components: list[dict[str, Any]] = []
+    merged_components: list[BatchIssuePayload] = []
     for indexes in sorted(components, key=lambda ids: ids[0]):
         base = group[indexes[0]]
         for idx in indexes[1:]:
@@ -109,20 +118,20 @@ def _merge_issue_group(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _merge_issues_transitively(
-    issues: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
+    issues: list[BatchIssuePayload],
+) -> list[BatchIssuePayload]:
+    grouped: dict[str, list[BatchIssuePayload]] = {}
     for issue in issues:
         grouped.setdefault(_issue_identity_key(issue), []).append(issue)
 
-    merged: list[dict[str, Any]] = []
+    merged: list[BatchIssuePayload] = []
     for group in grouped.values():
         merged.extend(_merge_issue_group(group))
     return merged
 
 
 def merge_batch_results(
-    batch_results: list[dict[str, Any]],
+    batch_results: list[BatchResultPayload],
     *,
     abstraction_sub_axes: tuple[str, ...],
     abstraction_component_names: dict[str, str],
@@ -130,8 +139,8 @@ def merge_batch_results(
     """Deterministically merge assessments/issues across batch outputs."""
     score_buckets: dict[str, list[tuple[float, float]]] = {}
     score_raw_by_dim: dict[str, list[float]] = {}
-    all_issues: list[dict[str, Any]] = []
-    merged_dimension_notes: dict[str, dict[str, Any]] = {}
+    all_issues: list[BatchIssuePayload] = []
+    merged_dimension_notes: dict[str, BatchDimensionNotePayload] = {}
     coverage_values: list[float] = []
     evidence_density_values: list[float] = []
     high_score_missing_issue_note_total = 0.0

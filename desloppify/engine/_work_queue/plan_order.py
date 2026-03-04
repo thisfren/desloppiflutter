@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from desloppify.base.registry import DETECTORS
 from desloppify.engine._plan.annotations import (
     get_issue_description,
     get_issue_note,
     get_issue_override,
 )
+from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.state import StateModel
 
 
@@ -26,7 +29,7 @@ def new_item_ids(state: StateModel) -> set[str]:
     }
 
 
-def enrich_plan_metadata(items: list[dict], plan: dict) -> None:
+def enrich_plan_metadata(items: list[WorkQueueItem], plan: dict) -> None:
     """Stamp plan description, note, and cluster info from overrides."""
     clusters: dict = plan.get("clusters", {})
 
@@ -50,7 +53,7 @@ def enrich_plan_metadata(items: list[dict], plan: dict) -> None:
 
 
 def stamp_plan_sort_keys(
-    items: list[dict],
+    items: list[WorkQueueItem],
     plan: dict,
     new_ids: set[str],
 ) -> None:
@@ -75,9 +78,9 @@ def stamp_plan_sort_keys(
 
 
 def separate_skipped(
-    items: list[dict],
+    items: list[WorkQueueItem],
     plan: dict,
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[WorkQueueItem], list[WorkQueueItem]]:
     """Separate skipped items from the main list.
 
     Returns ``(non_skipped, skipped)`` so callers can optionally re-append.
@@ -85,8 +88,8 @@ def separate_skipped(
     skipped_ids: set[str] = set(plan.get("skipped", {}).keys())
     if not skipped_ids:
         return items, []
-    non_skipped: list[dict] = []
-    skipped: list[dict] = []
+    non_skipped: list[WorkQueueItem] = []
+    skipped: list[WorkQueueItem] = []
     for item in items:
         if item["id"] in skipped_ids:
             skipped.append(item)
@@ -96,10 +99,10 @@ def separate_skipped(
 
 
 def filter_cluster_focus(
-    items: list[dict],
+    items: list[WorkQueueItem],
     plan: dict,
     cluster: str | None,
-) -> list[dict]:
+) -> list[WorkQueueItem]:
     """Filter to only cluster members when a cluster focus is active."""
     effective_cluster = cluster or plan.get("active_cluster")
     if not effective_cluster:
@@ -112,7 +115,7 @@ def filter_cluster_focus(
     return [item for item in items if item["id"] in cluster_member_ids]
 
 
-def stamp_positions(items: list[dict], plan: dict) -> None:
+def stamp_positions(items: list[WorkQueueItem], plan: dict) -> None:
     """Stamp queue_position and plan_skipped metadata on each item."""
     skipped_map: dict = plan.get("skipped", {})
     skipped_ids: set[str] = set(skipped_map.keys())
@@ -138,8 +141,8 @@ def action_type_for_detector(detector: str) -> str:
 
 
 def _build_cluster_meta(
-    cluster_name: str, members: list[dict], cluster_data: dict
-) -> dict:
+    cluster_name: str, members: list[WorkQueueItem], cluster_data: dict[str, Any]
+) -> WorkQueueItem:
     """Build a cluster meta-item from its member items."""
     detector = members[0].get("detector", "") if members else ""
     action = cluster_data.get("action") or ""
@@ -185,7 +188,7 @@ def _build_cluster_meta(
     }
 
 
-def collapse_clusters(items: list[dict], plan: dict) -> list[dict]:
+def collapse_clusters(items: list[WorkQueueItem], plan: dict) -> list[WorkQueueItem]:
     """Replace cluster member items with single cluster meta-items.
 
     Walks the list in order: the first member of each collapsed cluster is
@@ -207,14 +210,14 @@ def collapse_clusters(items: list[dict], plan: dict) -> list[dict]:
         return items
 
     # Collect members per cluster (preserving encounter order)
-    cluster_members: dict[str, list[dict]] = {}
+    cluster_members: dict[str, list[WorkQueueItem]] = {}
     for item in items:
         cname = fid_to_cluster.get(item.get("id", ""))
         if cname:
             cluster_members.setdefault(cname, []).append(item)
 
     # Build meta-items only for clusters with 2+ members in the queue
-    meta_items: dict[str, dict] = {}
+    meta_items: dict[str, WorkQueueItem] = {}
     for cname, members in cluster_members.items():
         if len(members) < 2:
             continue
@@ -225,7 +228,7 @@ def collapse_clusters(items: list[dict], plan: dict) -> list[dict]:
     # Walk in order: replace first member of each collapsed cluster
     # with its meta-item, skip subsequent members
     seen_clusters: set[str] = set()
-    result: list[dict] = []
+    result: list[WorkQueueItem] = []
     for item in items:
         cname = fid_to_cluster.get(item.get("id", ""))
         if cname and cname in meta_items:

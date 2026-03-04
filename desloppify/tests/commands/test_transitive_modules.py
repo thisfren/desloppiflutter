@@ -519,11 +519,11 @@ class TestCmdReviewEntrypoint:
 
         mock_do_validate_import.assert_called_once()
 
-    @patch("desloppify.app.commands.review.cmd._do_run_batches")
+    @patch("desloppify.app.commands.review.cmd.do_run_batches")
     @patch("desloppify.app.commands.review.cmd.resolve_lang")
     @patch("desloppify.app.commands.review.cmd.command_runtime")
     def test_run_batches_path(self, mock_runtime, mock_resolve_lang, mock_do_run_batches):
-        """When run_batches is set, calls _do_run_batches."""
+        """When run_batches is set, calls do_run_batches."""
         rt = MagicMock()
         rt.state = {"issues": {}}
         rt.state_path = "/tmp/state.json"

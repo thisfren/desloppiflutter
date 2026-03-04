@@ -3,7 +3,7 @@
 import re
 import sys
 
-from desloppify.base.discovery.api import rel
+from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize
 from desloppify.languages._framework.base.types import FixResult
 from desloppify.languages.typescript.fixers.fixer_io import apply_fixer

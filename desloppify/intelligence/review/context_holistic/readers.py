@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from desloppify.base.discovery.api import read_file_text, resolve_path
+from desloppify.base.discovery.file_paths import resolve_path
+
+from desloppify.base.discovery.source import read_file_text
 
 
 def _abs(filepath: str) -> str:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from desloppify.base.registry import DETECTORS
 from desloppify.engine._scoring.results.health import compute_health_breakdown
@@ -21,6 +21,7 @@ from desloppify.engine._work_queue.helpers import (
     supported_fixers_for_item,
 )
 from desloppify.engine._work_queue.synthetic import subjective_strict_scores
+from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.engine.planning.helpers import CONFIDENCE_ORDER
 from desloppify.state import path_scoped_issues
 
@@ -38,7 +39,7 @@ _RANK_ISSUE = 1           # Individual issues + assessed subjective
 
 
 def enrich_with_impact(
-    items: list[dict[str, Any]], dimension_scores: dict[str, Any]
+    items: list[WorkQueueItem], dimension_scores: dict[str, Any]
 ) -> None:
     """Stamp ``estimated_impact`` on each item based on dimension-level headroom.
 
@@ -70,7 +71,7 @@ def enrich_with_impact(
 
 
 def _compute_item_impact(
-    item: dict[str, Any],
+    item: WorkQueueItem,
     dim_impact: dict[str, dict[str, float]],
     get_dimension_for_detector,
 ) -> float:
@@ -98,11 +99,19 @@ def _compute_item_impact(
     return 0.0
 
 
-def subjective_score_value(item: dict[str, Any]) -> float:
+def subjective_score_value(item: WorkQueueItem) -> float:
+    raw_score: Any
     if item.get("kind") == "subjective_dimension":
         detail = detail_dict(item)
-        return float(detail.get("strict_score", item.get("subjective_score", 100.0)))
-    return float(item.get("subjective_score", 100.0))
+        raw_score = detail.get("strict_score", item.get("subjective_score", 100.0))
+    else:
+        raw_score = item.get("subjective_score", 100.0)
+    if raw_score is None:
+        return 100.0
+    try:
+        return float(raw_score)
+    except (TypeError, ValueError):
+        return 100.0
 
 
 def build_issue_items(
@@ -112,10 +121,10 @@ def build_issue_items(
     status_filter: str,
     scope: str | None,
     chronic: bool,
-) -> list[dict[str, Any]]:
+) -> list[WorkQueueItem]:
     scoped = path_scoped_issues(state.get("issues", {}), scan_path)
     subjective_scores = subjective_strict_scores(state)
-    out: list[dict[str, Any]] = []
+    out: list[WorkQueueItem] = []
 
     for issue_id, issue in scoped.items():
         if issue.get("suppressed"):
@@ -136,7 +145,7 @@ def build_issue_items(
             if issue_rank > threshold_rank:
                 continue
 
-        item = dict(issue)
+        item = cast(WorkQueueItem, dict(issue))
         item["id"] = issue_id
         item["kind"] = "issue"
         item["is_review"] = is_review_issue(item)
@@ -166,7 +175,7 @@ def build_issue_items(
     return out
 
 
-def _natural_sort_key(item: dict[str, Any]) -> tuple:
+def _natural_sort_key(item: WorkQueueItem) -> tuple:
     """Compute natural (non-plan-aware) ranking for queue items."""
     kind = item.get("kind", "issue")
 
@@ -218,7 +227,7 @@ def _natural_sort_key(item: dict[str, Any]) -> tuple:
     )
 
 
-def item_sort_key(item: dict[str, Any]) -> tuple:
+def item_sort_key(item: WorkQueueItem) -> tuple:
     """Unified sort key: plan position first, then natural ranking.
 
     When ``_plan_position`` is stamped (by :func:`stamp_plan_sort_keys`),
@@ -244,7 +253,7 @@ def item_sort_key(item: dict[str, Any]) -> tuple:
     return (group, *_natural_sort_key(item))
 
 
-def item_explain(item: dict[str, Any]) -> dict[str, Any]:
+def item_explain(item: WorkQueueItem) -> dict[str, Any]:
     kind = item.get("kind", "issue")
     if kind == "workflow_stage":
         return {
@@ -325,10 +334,10 @@ def item_explain(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def group_queue_items(
-    items: list[dict[str, Any]], group: str
-) -> dict[str, list[dict[str, Any]]]:
+    items: list[WorkQueueItem], group: str
+) -> dict[str, list[WorkQueueItem]]:
     """Group queue items for alternate output modes."""
-    grouped: dict[str, list[dict[str, Any]]] = {}
+    grouped: dict[str, list[WorkQueueItem]] = {}
     for item in items:
         if group == "file":
             key = item.get("file", "")

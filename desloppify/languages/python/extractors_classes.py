@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from desloppify.base.discovery.api import find_py_files
+from desloppify.base.discovery.source import find_py_files
 from desloppify.engine.detectors.base import ClassInfo, FunctionInfo
 from desloppify.languages.python.extractors_shared import find_block_end, read_file
 

@@ -8,7 +8,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.api import find_ts_files, rel, resolve_path
+from desloppify.base.discovery.file_paths import (
+
+    rel,
+
+    resolve_path,
+
+)
+
+from desloppify.base.discovery.source import find_ts_files
 from desloppify.base.output.fallbacks import log_best_effort_failure
 from desloppify.base.search.grep import grep_count_files, grep_files
 from desloppify.base.output.terminal import colorize, print_table

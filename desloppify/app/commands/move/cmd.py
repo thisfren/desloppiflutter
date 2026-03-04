@@ -19,7 +19,10 @@ from desloppify.app.commands.move.planning import (
     resolve_dest,
 )
 from desloppify.app.commands.move.reporting import print_file_move_plan
-from desloppify.base.discovery.api import rel, resolve_path
+from desloppify.base.discovery.file_paths import (
+    rel,
+    resolve_path,
+)
 from desloppify.base.exception_sets import CommandError
 from desloppify.base.output.terminal import colorize
 

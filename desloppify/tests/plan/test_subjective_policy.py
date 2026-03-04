@@ -286,14 +286,13 @@ def test_backlog_blocks_rerun():
 
 
 # ---------------------------------------------------------------------------
-# Back-compat: NON_OBJECTIVE_DETECTORS re-exported from stale_dimensions
+# stale_dimensions does not re-export subjective policy internals
 # ---------------------------------------------------------------------------
 
-def test_non_objective_detectors_reexported():
-    from desloppify.engine._plan.stale_dimensions import (
-        NON_OBJECTIVE_DETECTORS as from_stale,
-    )
-    assert from_stale is NON_OBJECTIVE_DETECTORS
+def test_non_objective_detectors_not_reexported_from_stale_dimensions():
+    import desloppify.engine._plan.stale_dimensions as stale_mod
+
+    assert not hasattr(stale_mod, "NON_OBJECTIVE_DETECTORS")
 
 
 # ---------------------------------------------------------------------------

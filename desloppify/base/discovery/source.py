@@ -14,7 +14,7 @@ from desloppify.base.discovery.file_paths import (
     safe_relpath as _safe_relpath,
 )
 from desloppify.base.runtime_state import current_runtime_context
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 
 # Directories that are never useful to scan — always pruned during traversal.
 DEFAULT_EXCLUSIONS = frozenset(

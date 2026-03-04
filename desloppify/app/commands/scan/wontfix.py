@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from desloppify import state as state_mod
-from desloppify.base.discovery.api import resolve_path
+from desloppify.base.discovery.file_paths import resolve_path
 
 _STRUCTURAL_COMPLEXITY_GROWTH_THRESHOLD = 10
 _STRUCTURAL_LOC_GROWTH_THRESHOLD = 50

@@ -3,37 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 from desloppify.languages import get_lang
-
-
-class _DeprecatedAction(argparse.Action):
-    """Argparse action that prints a deprecation warning and stores the value."""
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        print(
-            f"Warning: {option_string} is deprecated and will be removed in a future version.",
-            file=sys.stderr,
-        )
-        setattr(namespace, self.dest, values)
-
-
-class _DeprecatedBoolAction(argparse.Action):
-    """Argparse action for deprecated boolean flags (store_true equivalent)."""
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("nargs", 0)
-        kwargs.setdefault("const", True)
-        kwargs.setdefault("default", False)
-        super().__init__(*args, **kwargs)
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        print(
-            f"Warning: {option_string} is deprecated and will be removed in a future version.",
-            file=sys.stderr,
-        )
-        setattr(namespace, self.dest, True)
 
 
 def _add_detect_parser(sub, detector_names: list[str]) -> None:
@@ -365,42 +336,6 @@ examples:
         default=0.8,
         help="Summary similarity threshold for merge (0-1, default: 0.8)",
     )
-
-    # -- deprecated --
-    g_deprecated = p_review.add_argument_group("deprecated")
-    g_deprecated.add_argument(
-        "--max-age",
-        type=int,
-        default=None,
-        action=_DeprecatedAction,
-        help="Deprecated in holistic-only mode (ignored)",
-    )
-    g_deprecated.add_argument(
-        "--max-files",
-        type=int,
-        default=None,
-        action=_DeprecatedAction,
-        help="Deprecated in holistic-only mode (ignored)",
-    )
-    g_deprecated.add_argument(
-        "--refresh",
-        action=_DeprecatedBoolAction,
-        help="Deprecated in holistic-only mode (ignored)",
-    )
-    g_deprecated.add_argument(
-        "--holistic",
-        action=_DeprecatedBoolAction,
-        help="Deprecated: holistic is now the only review mode",
-    )
-    g_deprecated.add_argument(
-        "--save-run-log",
-        action="store_true",
-        help=(
-            "Deprecated no-op: run logs are now always saved while running "
-            "(default location: run artifacts dir)"
-        ),
-    )
-
 
 def _add_zone_parser(sub) -> None:
     p_zone = sub.add_parser("zone", help="Show/set/clear zone classifications")

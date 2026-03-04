@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from desloppify.base.text.text_api import is_numeric
+from desloppify.base.text_utils import is_numeric
 from desloppify.engine._scoring.subjective.core import DISPLAY_NAMES
 from desloppify.intelligence.review.dimensions.data import (
     load_dimensions,

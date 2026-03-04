@@ -7,13 +7,24 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.api import (
-    disable_file_cache,
-    enable_file_cache,
-    is_file_cache_enabled,
-    read_file_text,
+from desloppify.base.discovery.file_paths import (
+
     rel,
+
     resolve_path,
+
+)
+
+from desloppify.base.discovery.source import (
+
+    disable_file_cache,
+
+    enable_file_cache,
+
+    is_file_cache_enabled,
+
+    read_file_text,
+
 )
 from desloppify.engine._state.schema import StateModel
 from desloppify.intelligence.review._context.models import ReviewContext

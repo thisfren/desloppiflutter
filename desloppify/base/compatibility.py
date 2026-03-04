@@ -26,6 +26,9 @@ SOFT_DEPRECATED_MODULES: frozenset[str] = frozenset(
         "desloppify.file_discovery",
         "desloppify.base.output_api",
         "desloppify.base.output_contract",
+        "desloppify.base.text.text_api",
+        "desloppify.base.discovery.api",
+        "desloppify.base.discovery.path_io",
     }
 )
 

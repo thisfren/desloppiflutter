@@ -4,17 +4,59 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.runtime import command_runtime
 from desloppify.base.exception_sets import CommandError
 
-from .batch.orchestrator import _do_run_batches, do_import_run
+from .batch.orchestrator import do_import_run, do_run_batches
 from .external import do_external_start, do_external_submit
 from .importing.cmd import do_import, do_validate_import
 from .merge import do_merge
 from .preflight import review_rerun_preflight
 from .prepare import do_prepare
+
+
+@dataclass(frozen=True)
+class ReviewOptions:
+    """All user-facing review command options extracted once from argparse."""
+
+    merge: bool = False
+    run_batches: bool = False
+    import_run_dir: str | None = None
+    external_start: bool = False
+    external_submit: bool = False
+    import_file: str | None = None
+    validate_import_file: str | None = None
+    session_id: str | None = None
+    allow_partial: bool = False
+    scan_after_import: bool = False
+    path: str = "."
+    dry_run: bool = False
+    manual_override: bool = False
+    attested_external: bool = False
+    attest: str | None = None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ReviewOptions:
+        return cls(
+            merge=bool(getattr(args, "merge", False)),
+            run_batches=bool(getattr(args, "run_batches", False)),
+            import_run_dir=getattr(args, "import_run_dir", None),
+            external_start=bool(getattr(args, "external_start", False)),
+            external_submit=bool(getattr(args, "external_submit", False)),
+            import_file=getattr(args, "import_file", None),
+            validate_import_file=getattr(args, "validate_import_file", None),
+            session_id=getattr(args, "session_id", None),
+            allow_partial=bool(getattr(args, "allow_partial", False)),
+            scan_after_import=bool(getattr(args, "scan_after_import", False)),
+            path=str(getattr(args, "path", ".") or "."),
+            dry_run=bool(getattr(args, "dry_run", False)),
+            manual_override=bool(getattr(args, "manual_override", False)),
+            attested_external=bool(getattr(args, "attested_external", False)),
+            attest=getattr(args, "attest", None),
+        )
 
 
 def _enable_live_review_output() -> None:
@@ -36,32 +78,23 @@ def _require_lang(lang) -> None:
     raise CommandError("Error: could not detect language. Use --lang.", exit_code=1)
 
 
-def _mode_flags(args: argparse.Namespace) -> tuple[list[bool], object, object]:
-    merge = bool(getattr(args, "merge", False))
-    run_batches = bool(getattr(args, "run_batches", False))
-    import_run_dir = bool(getattr(args, "import_run_dir", None))
-    external_start = bool(getattr(args, "external_start", False))
-    external_submit = bool(getattr(args, "external_submit", False))
-    import_file = getattr(args, "import_file", None)
-    validate_import_file = getattr(args, "validate_import_file", None)
-    import_mode = bool(import_file) and not external_submit
-    flags = [
-        merge,
-        run_batches,
-        import_run_dir,
-        external_start,
-        external_submit,
+def _mode_flags(opts: ReviewOptions) -> list[bool]:
+    import_mode = bool(opts.import_file) and not opts.external_submit
+    return [
+        opts.merge,
+        opts.run_batches,
+        bool(opts.import_run_dir),
+        opts.external_start,
+        opts.external_submit,
         import_mode,
-        bool(validate_import_file),
+        bool(opts.validate_import_file),
     ]
-    return flags, import_file, validate_import_file
 
 
 def _validate_mode_selection(
-    args: argparse.Namespace,
+    opts: ReviewOptions,
     *,
     mode_flags: list[bool],
-    import_file: object,
 ) -> None:
     if sum(1 for enabled in mode_flags if enabled) > 1:
         raise CommandError(
@@ -70,13 +103,12 @@ def _validate_mode_selection(
             exit_code=1,
         )
 
-    external_submit = bool(getattr(args, "external_submit", False))
-    if external_submit and not import_file:
+    if opts.external_submit and not opts.import_file:
         raise CommandError(
             "Error: --external-submit requires --import FILE.",
             exit_code=2,
         )
-    if external_submit and not getattr(args, "session_id", None):
+    if opts.external_submit and not opts.session_id:
         raise CommandError(
             "Error: --external-submit requires --session-id.",
             exit_code=2,
@@ -86,19 +118,18 @@ def _validate_mode_selection(
 def _run_review_mode(
     args: argparse.Namespace,
     *,
+    opts: ReviewOptions,
     runtime,
     state,
     lang,
     state_file,
-    import_file,
-    validate_import_file,
 ) -> None:
-    if bool(getattr(args, "merge", False)):
+    if opts.merge:
         do_merge(args)
         return
-    if bool(getattr(args, "run_batches", False)):
+    if opts.run_batches:
         review_rerun_preflight(state, args, state_file=state_file)
-        _do_run_batches(
+        do_run_batches(
             args,
             state,
             lang,
@@ -106,20 +137,19 @@ def _run_review_mode(
             config=runtime.config,
         )
         return
-    import_run_dir = getattr(args, "import_run_dir", None)
-    if import_run_dir:
+    if opts.import_run_dir:
         do_import_run(
-            import_run_dir,
+            opts.import_run_dir,
             state,
             lang,
             state_file,
             config=runtime.config,
-            allow_partial=bool(getattr(args, "allow_partial", False)),
-            scan_after_import=bool(getattr(args, "scan_after_import", False)),
-            scan_path=str(getattr(args, "path", ".") or "."),
+            allow_partial=opts.allow_partial,
+            scan_after_import=opts.scan_after_import,
+            scan_path=opts.path,
         )
         return
-    if bool(getattr(args, "external_start", False)):
+    if opts.external_start:
         review_rerun_preflight(state, args, state_file=state_file)
         do_external_start(
             args,
@@ -128,42 +158,42 @@ def _run_review_mode(
             config=runtime.config,
         )
         return
-    if bool(getattr(args, "external_submit", False)):
+    if opts.external_submit:
         do_external_submit(
-            import_file=str(import_file),
-            session_id=str(args.session_id),
+            import_file=str(opts.import_file),
+            session_id=str(opts.session_id),
             state=state,
             lang=lang,
             state_file=state_file,
             config=runtime.config,
-            allow_partial=bool(getattr(args, "allow_partial", False)),
-            scan_after_import=bool(getattr(args, "scan_after_import", False)),
-            scan_path=str(getattr(args, "path", ".") or "."),
-            dry_run=bool(getattr(args, "dry_run", False)),
+            allow_partial=opts.allow_partial,
+            scan_after_import=opts.scan_after_import,
+            scan_path=opts.path,
+            dry_run=opts.dry_run,
         )
         return
-    if validate_import_file:
+    if opts.validate_import_file:
         do_validate_import(
-            validate_import_file,
+            opts.validate_import_file,
             lang,
-            allow_partial=bool(getattr(args, "allow_partial", False)),
-            manual_override=bool(getattr(args, "manual_override", False)),
-            attested_external=bool(getattr(args, "attested_external", False)),
-            manual_attest=getattr(args, "attest", None),
+            allow_partial=opts.allow_partial,
+            manual_override=opts.manual_override,
+            attested_external=opts.attested_external,
+            manual_attest=opts.attest,
         )
         return
 
-    if import_file:
+    if opts.import_file:
         do_import(
-            import_file,
+            opts.import_file,
             state,
             lang,
             state_file,
             config=runtime.config,
-            allow_partial=bool(getattr(args, "allow_partial", False)),
-            manual_override=bool(getattr(args, "manual_override", False)),
-            attested_external=bool(getattr(args, "attested_external", False)),
-            manual_attest=getattr(args, "attest", None),
+            allow_partial=opts.allow_partial,
+            manual_override=opts.manual_override,
+            attested_external=opts.attested_external,
+            manual_attest=opts.attest,
         )
         return
     review_rerun_preflight(state, args, state_file=state_file)
@@ -179,18 +209,17 @@ def cmd_review(args: argparse.Namespace) -> None:
     lang = resolve_lang(args)
     _require_lang(lang)
 
-    mode_flags, import_file, validate_import_file = _mode_flags(args)
+    opts = ReviewOptions.from_args(args)
+    mode_flags = _mode_flags(opts)
     _validate_mode_selection(
-        args,
+        opts,
         mode_flags=mode_flags,
-        import_file=import_file,
     )
     _run_review_mode(
         args,
+        opts=opts,
         runtime=runtime,
         state=state,
         lang=lang,
         state_file=state_file,
-        import_file=import_file,
-        validate_import_file=validate_import_file,
     )

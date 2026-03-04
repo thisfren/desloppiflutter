@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from typing import Any, TypedDict
 
 from desloppify import state as state_mod
 from desloppify.app.commands.helpers.query import write_query
@@ -19,6 +20,40 @@ from desloppify.intelligence.review.issue_merge import (
     track_merged_from,
 )
 from desloppify.state import save_state, utc_now
+
+
+class ResolutionAttestationPayload(TypedDict, total=False):
+    """Resolution metadata attached to auto-resolved duplicate issues."""
+
+    kind: str
+    text: str
+    attested_at: str
+    scan_verified: bool
+
+
+class ReviewIssueDetailPayload(TypedDict, total=False):
+    """Issue detail fields used by conceptual merge logic."""
+
+    holistic: bool
+    dimension: str
+    related_files: list[str]
+    evidence: list[str]
+    suggestion: str
+    merged_from: list[str]
+    merged_at: str
+
+
+class ReviewIssueStatePayload(TypedDict, total=False):
+    """Open review issue contract used during merge grouping and resolution."""
+
+    id: str
+    detector: str
+    summary: str
+    detail: ReviewIssueDetailPayload
+    status: str
+    resolved_at: str
+    note: str
+    resolution_attestation: ResolutionAttestationPayload | dict[str, Any]
 
 
 def _summary_similarity(a: str, b: str) -> float:
@@ -41,7 +76,7 @@ def _parse_holistic_identifier(issue_id: str) -> str:
     return candidate
 
 
-def _related_files_set(issue: dict) -> set[str]:
+def _related_files_set(issue: ReviewIssueStatePayload) -> set[str]:
     related = issue.get("detail", {}).get("related_files", [])
     if not isinstance(related, list):
         return set()
@@ -49,8 +84,8 @@ def _related_files_set(issue: dict) -> set[str]:
 
 
 def _same_issue_concept(
-    left: dict,
-    right: dict,
+    left: ReviewIssueStatePayload,
+    right: ReviewIssueStatePayload,
     *,
     similarity_threshold: float,
 ) -> bool:
@@ -80,7 +115,10 @@ def _same_issue_concept(
     return True
 
 
-def _merge_issue_details(primary: dict, duplicate: dict) -> None:
+def _merge_issue_details(
+    primary: ReviewIssueStatePayload,
+    duplicate: ReviewIssueStatePayload,
+) -> None:
     primary_detail = primary.setdefault("detail", {})
     duplicate_detail = duplicate.get("detail", {})
 
@@ -95,7 +133,9 @@ def do_merge(args: argparse.Namespace) -> None:
     state = runtime.state
     state_file = runtime.state_path
     narrative = compute_narrative(state, context=NarrativeContext(command="review"))
-    items = list_open_review_issues(state)
+    items: list[ReviewIssueStatePayload] = [
+        issue for issue in list_open_review_issues(state) if isinstance(issue, dict)
+    ]
 
     if not items:
         print(colorize("\n  No review issues open.\n", "dim"))
@@ -118,7 +158,7 @@ def do_merge(args: argparse.Namespace) -> None:
         return
 
     consumed: set[str] = set()
-    merge_groups: list[list[dict]] = []
+    merge_groups: list[list[ReviewIssueStatePayload]] = []
     for candidate in open_holistic:
         candidate_id = candidate.get("id", "")
         if not candidate_id or candidate_id in consumed:

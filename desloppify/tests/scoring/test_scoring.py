@@ -967,7 +967,7 @@ class TestSubjectiveScoring:
         # HOLISTIC_DIMENSIONS_BY_LANG (regression guard)
         import inspect
 
-        import desloppify.engine._state.scoring as state_scoring_mod
+        import desloppify.engine._scoring.state_integration as state_scoring_mod
 
         src = inspect.getsource(state_scoring_mod._update_objective_health)
         assert "load_dimensions_for_lang" in src

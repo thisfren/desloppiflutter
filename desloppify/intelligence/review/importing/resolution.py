@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from desloppify.engine._state.schema import StateModel
-from desloppify.state import utc_now
+from desloppify.engine._state.schema import Issue, StateModel, utc_now
 
 
 def auto_resolve_review_issues(
@@ -15,7 +14,7 @@ def auto_resolve_review_issues(
     new_ids: set[str],
     diff: dict[str, Any],
     note: str,
-    should_resolve: Callable[[dict[str, Any]], bool],
+    should_resolve: Callable[[Issue], bool],
     utc_now_fn=utc_now,
 ) -> None:
     """Auto-resolve stale open review issues that match a scope predicate."""

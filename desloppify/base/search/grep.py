@@ -6,7 +6,7 @@ import os
 import re
 
 from desloppify.base.discovery.source import read_file_text as _read_file_text
-from desloppify.base.text.text_api import get_project_root
+from desloppify.base.discovery.paths import get_project_root
 
 
 def grep_files(

@@ -33,8 +33,6 @@ from .scope import (
     validate_runner,
 )
 
-_build_batch_tasks = build_batch_tasks
-
 
 def _record_execution_issue(append_run_log_fn, batch_index: int, exc: Exception) -> None:
     """Record one execute_batches callback/task failure in run.log."""
@@ -164,7 +162,7 @@ def do_run_batches(
         print(colorize_fn(f"  Prompts: {run_dir / 'prompts'}", "dim"))
         append_run_log("run-finished dry-run")
         return
-    tasks = _build_batch_tasks(
+    tasks = build_batch_tasks(
         selected_indexes=selected_indexes,
         prompt_files=prompt_files,
         output_files=output_files,

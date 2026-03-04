@@ -6,7 +6,9 @@ import hashlib
 import re
 from pathlib import Path
 
-from desloppify.base.discovery.api import find_source_files, resolve_path
+from desloppify.base.discovery.file_paths import resolve_path
+
+from desloppify.base.discovery.source import find_source_files
 from desloppify.engine.detectors.base import FunctionInfo
 
 GDSCRIPT_FILE_EXCLUSIONS = [
