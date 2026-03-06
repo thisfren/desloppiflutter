@@ -96,7 +96,7 @@ def test_publish_workflow_keeps_release_safety_gates() -> None:
     assert on_block.get("release", {}).get("types") == ["published"]
     assert on_block.get("push", {}).get("tags") == ["v*"]
     assert "workflow_dispatch" in on_block
-    assert "push" in on_block and "branches" not in on_block.get("push", {})
+    assert on_block.get("push", {}).get("branches") == ["main"]
 
     publish_job = wf["jobs"]["publish"]
     names = _step_names(publish_job)
