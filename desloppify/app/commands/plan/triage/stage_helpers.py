@@ -5,6 +5,8 @@ from __future__ import annotations
 from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan import TRIAGE_IDS
 
+from .helpers import triage_coverage
+
 
 def _require_triage_pending(plan: dict, *, action: str) -> bool:
     """Require at least one triage stage ID to be present in queue for an action."""
@@ -45,13 +47,7 @@ def _validate_stage_report(
 
 def _triage_coverage(plan: dict) -> tuple[int, int, dict]:
     """Return (organized, total, clusters) for triage progress."""
-    clusters = plan.get("clusters", {})
-    all_cluster_ids: set[str] = set()
-    for cluster in clusters.values():
-        all_cluster_ids.update(cluster.get("issue_ids", []))
-    queue_ids = [issue_id for issue_id in plan.get("queue_order", []) if issue_id not in TRIAGE_IDS]
-    organized = sum(1 for issue_id in queue_ids if issue_id in all_cluster_ids)
-    return organized, len(queue_ids), clusters
+    return triage_coverage(plan)
 
 
 def _unenriched_clusters(plan: dict) -> list[tuple[str, list[str]]]:
