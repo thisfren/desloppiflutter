@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.runtime import command_runtime
+from desloppify.app.commands.helpers.state import require_completed_scan
 from desloppify.base.exception_sets import CommandError
 
 from .batch.orchestrator import do_import_run, do_run_batches
@@ -115,6 +116,11 @@ def _validate_mode_selection(
         )
 
 
+def _is_default_prepare_mode(opts: ReviewOptions, mode_flags: list[bool]) -> bool:
+    """True when the command will run the default prepare flow (no explicit mode)."""
+    return not any(mode_flags) and not opts.import_file
+
+
 def _run_review_mode(
     args: argparse.Namespace,
     *,
@@ -217,6 +223,13 @@ def cmd_review(args: argparse.Namespace) -> None:
         opts,
         mode_flags=mode_flags,
     )
+
+    # For default prepare and --run-batches modes, require a completed scan
+    # so the command doesn't hang building context from an empty/missing state.
+    if _is_default_prepare_mode(opts, mode_flags) or opts.run_batches:
+        if not require_completed_scan(state):
+            return
+
     _run_review_mode(
         args,
         opts=opts,

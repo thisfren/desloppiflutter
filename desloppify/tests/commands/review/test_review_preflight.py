@@ -545,7 +545,7 @@ def _mock_runtime():
     """Return a mock command_runtime result."""
     rt = MagicMock()
     rt.state_path = "/tmp/state.json"
-    rt.state = {}
+    rt.state = {"last_scan": "2024-01-01T00:00:00"}
     rt.config = {}
     return rt
 

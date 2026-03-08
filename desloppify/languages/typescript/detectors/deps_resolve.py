@@ -26,6 +26,30 @@ def load_tsconfig_paths(project_root: Path) -> dict[str, str]:
     return load_tsconfig_paths_cached(str(project_root.resolve()))
 
 
+def find_tsconfig_root(scan_path: Path, project_root: Path) -> Path:
+    """Find the directory containing tsconfig.json, searching scan_path then project_root.
+
+    When the scan path differs from the project root (e.g. monorepos or
+    ``--path`` pointing at a subdirectory), the tsconfig may live alongside
+    the scanned code rather than at the workspace root.  We check the scan
+    path first, then walk up to (and including) the project root.
+    """
+    resolved_root = project_root.resolve()
+    candidate = scan_path.resolve()
+
+    # Walk from scan_path up to project_root looking for tsconfig.json
+    while True:
+        for name in ("tsconfig.json", "tsconfig.app.json", "jsconfig.json"):
+            if (candidate / name).is_file():
+                return candidate
+        if candidate == resolved_root or candidate == candidate.parent:
+            break
+        candidate = candidate.parent
+
+    # Fall back to project_root (load_tsconfig_paths will use its own fallback)
+    return resolved_root
+
+
 def parse_tsconfig_paths(project_root: Path) -> dict[str, str]:
     """Parse tsconfig paths from disk. Internal — use ``load_tsconfig_paths``."""
     fallback = {"@/": "src/"}
@@ -126,9 +150,14 @@ def resolve_alias(
     tsconfig_paths: dict[str, str],
     project_root: Path,
 ) -> Path | None:
-    """Resolve a tsconfig path alias to an absolute path."""
-    for prefix, target_dir in tsconfig_paths.items():
+    """Resolve a tsconfig path alias to an absolute path.
+
+    Prefixes are checked longest-first so that ``@components/*`` is preferred
+    over ``@/*`` when both could match.
+    """
+    for prefix in sorted(tsconfig_paths, key=len, reverse=True):
         if module_path.startswith(prefix):
+            target_dir = tsconfig_paths[prefix]
             relative = module_path[len(prefix) :]
             return (project_root / target_dir / relative).resolve()
     return None

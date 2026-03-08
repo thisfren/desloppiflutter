@@ -219,19 +219,20 @@ class TestCheckStall:
         assert sig is None
         assert stable == now  # baseline set to now
 
-    def test_no_output_file_stalls_after_threshold(self, tmp_path):
-        """Missing output file stalls when both output age and stream idle exceed threshold."""
+    def test_no_output_file_never_stalls(self, tmp_path):
+        """Missing output file never triggers stall — the real timeout handles it."""
         output_file = tmp_path / "nope.json"
         baseline = 1000.0
-        now = 1050.0  # 50s later
+        now = 1050.0  # 50s later, well past threshold
         last_activity = 1010.0  # 40s idle
         stalled, sig, stable = _check_stall(
             output_file, None, baseline, now, last_activity, threshold=30
         )
-        assert stalled is True
+        assert stalled is False
+        assert stable == baseline  # baseline preserved
 
     def test_no_output_file_not_stalled_when_stream_active(self, tmp_path):
-        """Missing output but recent stream activity prevents stall."""
+        """Missing output but recent stream activity — still no stall."""
         output_file = tmp_path / "nope.json"
         baseline = 1000.0
         now = 1050.0

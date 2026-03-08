@@ -279,6 +279,37 @@ def _build_and_render_queue(args: argparse.Namespace, state: dict, config: dict)
         queue["items"] = items
         queue["total"] = len(items)
 
+    # Early exit: when queue is empty, skip expensive narrative computation
+    # and second queue build.  This prevents hangs on clean worktrees with
+    # zero findings where downstream processing would do significant work
+    # for no visible benefit.
+    if not items:
+        strict_score = state_mod.score_snapshot(state).strict
+        plan_start_strict = None
+        if plan_data:
+            plan_start_strict, _ = _plan_queue_context(
+                state=state, plan_data=plan_data, context=ctx,
+            )
+        _render_queue_header(queue, opts.explain)
+        _show_empty_queue(
+            queue,
+            strict_score,
+            plan_start_strict=plan_start_strict,
+            target_strict=target_strict,
+        )
+        # Still write a minimal query payload for programmatic consumers
+        payload = _build_next_payload(
+            queue=queue,
+            items=items,
+            state=state,
+            narrative={},
+            plan_data=plan_data,
+        )
+        if guardrail_warnings:
+            payload["warnings"] = guardrail_warnings
+        write_query(payload)
+        return
+
     lang = resolve_lang(args)
     lang_name = lang.name if lang else None
     narrative = compute_narrative(

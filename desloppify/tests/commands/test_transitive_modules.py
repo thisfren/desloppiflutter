@@ -451,7 +451,7 @@ class TestCmdReviewEntrypoint:
     def test_prepare_path(self, mock_runtime, mock_resolve_lang, mock_do_prepare):
         """When no import_file and no run_batches, falls through to do_prepare."""
         rt = MagicMock()
-        rt.state = {"issues": {}}
+        rt.state = {"issues": {}, "last_scan": "2024-01-01T00:00:00"}
         rt.state_path = "/tmp/state.json"
         rt.config = {}
         mock_runtime.return_value = rt
@@ -525,7 +525,7 @@ class TestCmdReviewEntrypoint:
     def test_run_batches_path(self, mock_runtime, mock_resolve_lang, mock_do_run_batches):
         """When run_batches is set, calls do_run_batches."""
         rt = MagicMock()
-        rt.state = {"issues": {}}
+        rt.state = {"issues": {}, "last_scan": "2024-01-01T00:00:00"}
         rt.state_path = "/tmp/state.json"
         rt.config = {}
         mock_runtime.return_value = rt

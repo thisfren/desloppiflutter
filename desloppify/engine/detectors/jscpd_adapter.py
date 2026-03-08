@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -165,17 +166,39 @@ def _parse_jscpd_report(report: dict, scan_path: Path) -> list[dict]:
     return entries
 
 
+def _resolve_jscpd_command() -> list[str] | None:
+    """Return the best available command prefix for running jscpd.
+
+    Prefers a locally/globally installed ``jscpd`` executable over ``npx``.
+    Returns ``None`` when neither ``jscpd`` nor ``npx`` can be found.
+    """
+    jscpd_path = shutil.which("jscpd")
+    if jscpd_path:
+        logger.debug("jscpd: using installed executable at %s", jscpd_path)
+        return [jscpd_path]
+    npx_path = shutil.which("npx")
+    if npx_path:
+        logger.debug("jscpd: falling back to npx at %s", npx_path)
+        return [npx_path, "--yes", "jscpd"]
+    return None
+
+
 def detect_with_jscpd(path: Path) -> list[dict] | None:
     """Run jscpd on *path* and return duplication entries, or None on failure."""
+    cmd_prefix = _resolve_jscpd_command()
+    if cmd_prefix is None:
+        warn_best_effort(
+            "Boilerplate duplication detection skipped: jscpd/npx not found. "
+            "Install with `npm install -g jscpd`."
+        )
+        logger.debug("jscpd: neither jscpd nor npx found — skipping")
+        return None
+
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            # Use explicit argv (no shell), a bounded timeout, and check=True so
-            # non-zero exits are surfaced and handled below.
             subprocess.run(
                 [
-                    "npx",
-                    "--yes",
-                    "jscpd",
+                    *cmd_prefix,
                     str(path),
                     "--reporters",
                     "json",
@@ -196,14 +219,14 @@ def detect_with_jscpd(path: Path) -> list[dict] | None:
             )
         except FileNotFoundError:
             warn_best_effort(
-                "Boilerplate duplication detection skipped: npx/jscpd not found. "
+                "Boilerplate duplication detection skipped: jscpd/npx not found. "
                 "Install with `npm install -g jscpd`."
             )
-            logger.debug("jscpd: npx not found — skipping boilerplate duplication detection")
+            logger.debug("jscpd: command not found at runtime — skipping")
             return None
         except subprocess.CalledProcessError as exc:
             warn_best_effort(
-                "Boilerplate duplication detection skipped: npx/jscpd exited with errors."
+                "Boilerplate duplication detection skipped: jscpd exited with errors."
             )
             logger.debug(
                 "jscpd: non-zero exit (%s): %s",
@@ -213,9 +236,9 @@ def detect_with_jscpd(path: Path) -> list[dict] | None:
             return None
         except OSError as exc:
             warn_best_effort(
-                "Boilerplate duplication detection skipped: npx/jscpd failed to run."
+                "Boilerplate duplication detection skipped: jscpd failed to run."
             )
-            logger.debug("jscpd: OS error running npx/jscpd: %s", exc)
+            logger.debug("jscpd: OS error running jscpd: %s", exc)
             return None
         except subprocess.TimeoutExpired:
             warn_best_effort(
@@ -238,4 +261,4 @@ def detect_with_jscpd(path: Path) -> list[dict] | None:
         return _parse_jscpd_report(report, path)
 
 
-__all__ = ["_parse_jscpd_report", "detect_with_jscpd"]
+__all__ = ["_parse_jscpd_report", "_resolve_jscpd_command", "detect_with_jscpd"]

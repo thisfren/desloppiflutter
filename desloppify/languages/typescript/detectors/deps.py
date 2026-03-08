@@ -22,6 +22,9 @@ from desloppify.engine.detectors.graph import (
     get_coupling_score,
 )
 from desloppify.languages.typescript.detectors.deps_resolve import (
+    find_tsconfig_root as _find_tsconfig_root,
+)
+from desloppify.languages.typescript.detectors.deps_resolve import (
     load_tsconfig_paths as _load_tsconfig_paths,
 )
 from desloppify.languages.typescript.detectors.deps_resolve import (
@@ -59,7 +62,8 @@ def build_dep_graph(
         lambda: {"imports": set(), "importers": set(), "external_imports": set()}
     )
     project_root = get_project_root()
-    tsconfig_paths = _load_tsconfig_paths(project_root)
+    tsconfig_root = _find_tsconfig_root(path, project_root)
+    tsconfig_paths = _load_tsconfig_paths(tsconfig_root)
 
     ts_files = find_ts_files(path)
     hits = grep_files(r"""(?:\bfrom\s+['"]|\bimport\s+['"])""", ts_files)
@@ -75,7 +79,7 @@ def build_dep_graph(
                 module_path,
                 filepath,
                 tsconfig_paths,
-                project_root,
+                tsconfig_root,
                 graph,
                 source_resolved,
             )
@@ -94,7 +98,7 @@ def build_dep_graph(
                     module_path,
                     filepath,
                     tsconfig_paths,
-                    project_root,
+                    tsconfig_root,
                     graph,
                     source_resolved,
                 )

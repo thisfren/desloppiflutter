@@ -177,7 +177,13 @@ def _check_stall(
     last_activity: float,
     threshold: int,
 ) -> tuple[bool, tuple[int, int] | None, float | None]:
-    """Check for runner stall. Returns (stalled, new_sig, new_stable_since)."""
+    """Check for runner stall. Returns (stalled, new_sig, new_stable_since).
+
+    When no output artifact exists yet the batch is still initialising — the
+    stall detector must not declare a stall.  The caller already enforces the
+    real timeout, so batches that never produce output will still be killed;
+    they just won't be killed *early* by the stall heuristic.
+    """
     try:
         stat = output_file.stat()
         current_signature: tuple[int, int] | None = (
@@ -187,11 +193,10 @@ def _check_stall(
     except OSError:
         current_signature = None
     if current_signature is None:
+        # No output file yet — the batch hasn't started writing.  Never
+        # declare a stall in this state; just carry forward the baseline
+        # timestamp so that once the file *does* appear, we start fresh.
         baseline = prev_stable if isinstance(prev_stable, int | float) else now
-        output_age = now - baseline
-        stream_idle = now - last_activity
-        if output_age >= threshold and stream_idle >= threshold:
-            return True, None, baseline
         return False, None, baseline
     if current_signature != prev_sig:
         return False, current_signature, now

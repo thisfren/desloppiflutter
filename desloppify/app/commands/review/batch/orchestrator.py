@@ -13,6 +13,7 @@ from desloppify.base.coercions import coerce_positive_int
 from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.exception_sets import CommandError, PacketValidationError
 from desloppify.base.output.terminal import colorize, log
+from desloppify.base.search.query_paths import query_file_path
 import desloppify.intelligence.narrative.core as narrative_mod
 from desloppify.intelligence import review as review_mod
 from desloppify.intelligence.review.feedback_contract import (
@@ -74,6 +75,30 @@ ABSTRACTION_COMPONENT_NAMES = {
 
 
 
+def _try_load_prepared_packet() -> dict | None:
+    """Load a prepared holistic packet from query.json if it looks valid.
+
+    Returns the packet dict when query.json exists, parses as JSON, and
+    contains the ``investigation_batches`` key written by ``--prepare``.
+    Returns ``None`` otherwise (missing file, parse error, wrong shape).
+    """
+    try:
+        qf = query_file_path()
+        if not qf.exists():
+            return None
+        data = json.loads(qf.read_text())
+    except (OSError, json.JSONDecodeError, RuntimeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if "investigation_batches" not in data:
+        return None
+    batches = data["investigation_batches"]
+    if not isinstance(batches, list) or not batches:
+        return None
+    return data
+
+
 def _merge_batch_results(batch_results: list[object]) -> dict[str, object]:
     """Deterministically merge assessments/issues across batch outputs."""
     normalized_results: list[batch_core_mod.BatchResultPayload] = []
@@ -117,8 +142,29 @@ def _load_or_prepare_packet(
         print(colorize(f"  Blind packet: {blind_path}", "dim"))
         return packet, packet_path, blind_path
 
-    path = Path(args.path)
+    # When no explicit --packet and no explicit --dimensions were given,
+    # check whether a prior ``review --prepare`` left a valid query.json
+    # packet we can reuse instead of rebuilding from scratch.
     dims = parse_dimensions(args)
+    if not dims:
+        prepared = _try_load_prepared_packet()
+        if prepared is not None:
+            print(colorize("  Reusing prepared packet from query.json", "dim"))
+            blind_path = _blind_packet_path()
+            blind_packet = build_blind_packet(prepared)
+            safe_write_text(blind_path, json.dumps(blind_packet, indent=2) + "\n")
+            packet_path, blind_saved = write_packet_snapshot(
+                prepared,
+                stamp=stamp,
+                review_packet_dir=_review_packet_dir(),
+                blind_path=blind_path,
+                safe_write_text_fn=safe_write_text,
+            )
+            print(colorize(f"  Immutable packet: {packet_path}", "dim"))
+            print(colorize(f"  Blind packet: {blind_saved}", "dim"))
+            return prepared, packet_path, blind_saved
+
+    path = Path(args.path)
     dimensions = list(dims) if dims else None
     retrospective = bool(getattr(args, "retrospective", False))
     retrospective_max_issues = coerce_positive_int(

@@ -9,6 +9,8 @@ from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan import (
     TRIAGE_IDS,
     TRIAGE_STAGE_IDS,
+    WORKFLOW_CREATE_PLAN_ID,
+    WORKFLOW_SCORE_CHECKPOINT_ID,
     open_review_ids,
     purge_ids,
     review_issue_snapshot_hash,
@@ -182,8 +184,12 @@ def apply_completion(
         plan, open_review_ids=open_review_ids_from_state(state),
     )
 
-    # Purge all triage stage IDs.
-    purge_ids(plan, list(TRIAGE_IDS))
+    # Purge all triage stage IDs and stale workflow items that point to triage.
+    purge_ids(plan, [
+        *TRIAGE_IDS,
+        WORKFLOW_SCORE_CHECKPOINT_ID,
+        WORKFLOW_CREATE_PLAN_ID,
+    ])
 
     current_hash = review_issue_snapshot_hash(state)
 
@@ -204,6 +210,7 @@ def apply_completion(
             "strategy": strategy if strategy.strip().lower() != "same" else meta.get("strategy_summary", ""),
         }
     meta["triage_stages"] = {}  # clear stages on completion
+    meta.pop("triage_recommended", None)
     meta.pop("stage_refresh_required", None)
     meta.pop("stage_snapshot_hash", None)
 

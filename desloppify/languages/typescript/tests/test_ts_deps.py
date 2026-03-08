@@ -565,3 +565,129 @@ class TestFrameworkFiles:
         # Only the real import creates an edge, the img attr doesn't
         svelte_key = str((tmp_path / "App.svelte").resolve())
         assert graph[svelte_key]["import_count"] == 1
+
+
+# ── find_tsconfig_root ──────────────────────────────────────────
+
+
+class TestFindTsconfigRoot:
+    def test_tsconfig_at_scan_path(self, tmp_path):
+        """Finds tsconfig.json at the scan path."""
+        _write(tmp_path, "tsconfig.json", "{}")
+        result = deps_resolve_mod.find_tsconfig_root(tmp_path, tmp_path)
+        assert result == tmp_path.resolve()
+
+    def test_tsconfig_at_parent_of_scan_path(self, tmp_path):
+        """Walks up from scan path to find tsconfig.json in parent."""
+        _write(tmp_path, "tsconfig.json", "{}")
+        scan = tmp_path / "src"
+        scan.mkdir()
+        result = deps_resolve_mod.find_tsconfig_root(scan, tmp_path)
+        assert result == tmp_path.resolve()
+
+    def test_tsconfig_in_package_not_workspace_root(self, tmp_path):
+        """In a monorepo, finds tsconfig in the scanned package dir."""
+        pkg = tmp_path / "packages" / "frontend"
+        pkg.mkdir(parents=True)
+        _write(pkg, "tsconfig.json", "{}")
+        result = deps_resolve_mod.find_tsconfig_root(pkg, tmp_path)
+        assert result == pkg.resolve()
+
+    def test_no_tsconfig_falls_back_to_project_root(self, tmp_path):
+        """Falls back to project_root when no tsconfig exists anywhere."""
+        scan = tmp_path / "some" / "deep" / "dir"
+        scan.mkdir(parents=True)
+        result = deps_resolve_mod.find_tsconfig_root(scan, tmp_path)
+        assert result == tmp_path.resolve()
+
+    def test_tsconfig_app_json_also_found(self, tmp_path):
+        """Finds tsconfig.app.json as alternative config name."""
+        _write(tmp_path, "tsconfig.app.json", "{}")
+        result = deps_resolve_mod.find_tsconfig_root(tmp_path, tmp_path)
+        assert result == tmp_path.resolve()
+
+    def test_scan_path_between_package_and_root(self, tmp_path):
+        """tsconfig at intermediate dir between scan_path and root."""
+        pkg = tmp_path / "packages" / "frontend"
+        (pkg / "src").mkdir(parents=True)
+        _write(pkg, "tsconfig.json", "{}")
+        result = deps_resolve_mod.find_tsconfig_root(pkg / "src", tmp_path)
+        assert result == pkg.resolve()
+
+
+# ── Alias resolution with scan-path tsconfig ──────────────────
+
+
+class TestAliasScanPath:
+    def test_monorepo_alias_resolved_from_package_tsconfig(self, tmp_path):
+        """In a monorepo, aliases resolve using the package's tsconfig, not workspace root."""
+        pkg = tmp_path / "packages" / "frontend"
+        _write(
+            pkg,
+            "tsconfig.json",
+            json.dumps({"compilerOptions": {"paths": {"@/*": ["./src/*"]}}}),
+        )
+        _write(pkg, "src/lib/ai/core.ts", "export const x = 1;\n" * 15)
+        _write(
+            pkg,
+            "src/app/page.tsx",
+            "import { x } from '@/lib/ai/core';\nconsole.log(x);\n",
+        )
+
+        graph = deps_detector_mod.build_dep_graph(pkg)
+        core_key = str((pkg / "src/lib/ai/core.ts").resolve())
+        page_key = str((pkg / "src/app/page.tsx").resolve())
+
+        assert core_key in graph
+        assert graph[core_key]["importer_count"] == 1
+        assert page_key in graph[core_key]["importers"]
+
+    def test_monorepo_aliased_file_not_orphaned(self, tmp_path):
+        """Files imported via alias in a monorepo are not flagged as orphaned."""
+        pkg = tmp_path / "packages" / "frontend"
+        _write(
+            pkg,
+            "tsconfig.json",
+            json.dumps({"compilerOptions": {"paths": {"@/*": ["./src/*"]}}}),
+        )
+        _write(pkg, "src/lib/ai/core.ts", "export const x = 1;\n" * 15)
+        _write(
+            pkg,
+            "src/app/page.tsx",
+            "import { x } from '@/lib/ai/core';\nconsole.log(x);\n",
+        )
+
+        graph = deps_detector_mod.build_dep_graph(pkg)
+        orphans, _ = orphaned_detector_mod.detect_orphaned_files(
+            pkg,
+            graph,
+            extensions=[".ts", ".tsx"],
+            options=orphaned_detector_mod.OrphanedDetectionOptions(
+                extra_entry_patterns=[],
+                extra_barrel_names=set(),
+            ),
+        )
+        core_key = str((pkg / "src/lib/ai/core.ts").resolve())
+        orphan_files = {o["file"] for o in orphans}
+        assert core_key not in orphan_files
+
+
+# ── resolve_alias longest-prefix-first ──────────────────────────
+
+
+class TestResolveAliasLongestPrefix:
+    def test_longer_prefix_wins(self, tmp_path):
+        """When aliases overlap, the longest matching prefix is used."""
+        paths = {"@/": "app/", "@components/": "lib/components/"}
+        result = deps_resolve_mod.resolve_alias(
+            "@components/Button", paths, tmp_path
+        )
+        expected = (tmp_path / "lib/components/Button").resolve()
+        assert result == expected
+
+    def test_short_prefix_still_works(self, tmp_path):
+        """Short prefix matches when longer one doesn't."""
+        paths = {"@/": "src/", "@components/": "lib/components/"}
+        result = deps_resolve_mod.resolve_alias("@/utils/helpers", paths, tmp_path)
+        expected = (tmp_path / "src/utils/helpers").resolve()
+        assert result == expected
