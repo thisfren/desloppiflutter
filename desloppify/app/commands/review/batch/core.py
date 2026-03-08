@@ -55,6 +55,14 @@ class BatchDimensionNotePayload(TypedDict, total=False):
     sub_axes: dict[str, float]
 
 
+class BatchDimensionJudgmentPayload(TypedDict, total=False):
+    """Reviewer's holistic judgment narrative for a dimension."""
+
+    strengths: list[str]
+    issue_character: str
+    score_rationale: str
+
+
 class BatchQualityPayload(TypedDict, total=False):
     """Quality telemetry attached to each normalized batch output."""
 
@@ -70,6 +78,7 @@ class BatchResultPayload(TypedDict):
     assessments: dict[str, float]
     issues: list[BatchIssuePayload]
     dimension_notes: dict[str, BatchDimensionNotePayload]
+    dimension_judgment: dict[str, BatchDimensionJudgmentPayload]
     quality: BatchQualityPayload
 
 
@@ -228,6 +237,59 @@ def _normalize_abstraction_sub_axes(
             1,
         )
     return normalized
+
+
+def _validate_dimension_judgment(
+    key: str,
+    raw: object,
+    *,
+    log_fn,
+) -> BatchDimensionJudgmentPayload | None:
+    """Validate a single dimension_judgment entry. Returns cleaned payload or None."""
+    if not isinstance(raw, dict):
+        log_fn(f"  dimension_judgment.{key}: expected object, skipping")
+        return None
+
+    strengths_raw = raw.get("strengths")
+    if not isinstance(strengths_raw, list):
+        strengths: list[str] = []
+    else:
+        strengths = [
+            str(s).strip()
+            for s in strengths_raw[:5]
+            if isinstance(s, str) and str(s).strip()
+        ]
+
+    issue_character = ""
+    ic_raw = raw.get("issue_character")
+    if isinstance(ic_raw, str) and ic_raw.strip():
+        issue_character = ic_raw.strip()
+    else:
+        log_fn(f"  dimension_judgment.{key}.issue_character: missing or empty")
+
+    score_rationale = ""
+    sr_raw = raw.get("score_rationale")
+    if isinstance(sr_raw, str) and sr_raw.strip():
+        score_rationale = sr_raw.strip()
+        if len(score_rationale) < 50:
+            log_fn(
+                f"  dimension_judgment.{key}.score_rationale: "
+                f"too short ({len(score_rationale)} chars, want ≥50)"
+            )
+    else:
+        log_fn(f"  dimension_judgment.{key}.score_rationale: missing or empty")
+
+    if not issue_character and not score_rationale and not strengths:
+        return None
+
+    result: BatchDimensionJudgmentPayload = {}
+    if strengths:
+        result["strengths"] = strengths
+    if issue_character:
+        result["issue_character"] = issue_character
+    if score_rationale:
+        result["score_rationale"] = score_rationale
+    return result
 
 
 def _normalize_issues(
@@ -389,10 +451,12 @@ def normalize_batch_result(
     *,
     max_batch_issues: int,
     abstraction_sub_axes: tuple[str, ...],
+    log_fn=lambda _msg: None,
 ) -> tuple[
     dict[str, float],
     list[BatchIssuePayload],
     dict[str, BatchDimensionNotePayload],
+    dict[str, BatchDimensionJudgmentPayload],
     BatchQualityPayload,
 ]:
     """Validate and normalize one batch payload."""
@@ -455,6 +519,18 @@ def normalize_batch_result(
         if normalized_sub_axes:
             dimension_notes[key]["sub_axes"] = normalized_sub_axes
 
+    # Parse dimension_judgment
+    raw_judgment = payload.get("dimension_judgment", {})
+    dimension_judgment: dict[str, BatchDimensionJudgmentPayload] = {}
+    if isinstance(raw_judgment, dict):
+        for key in assessments:
+            judgment_raw = raw_judgment.get(key)
+            if judgment_raw is None:
+                continue
+            validated = _validate_dimension_judgment(key, judgment_raw, log_fn=log_fn)
+            if validated is not None:
+                dimension_judgment[key] = validated
+
     issues = _normalize_issues(
         payload.get("issues"),
         dimension_notes,
@@ -474,6 +550,7 @@ def normalize_batch_result(
         assessments,
         [issue.to_payload() for issue in issues],
         dimension_notes,
+        dimension_judgment,
         quality,
     )
 

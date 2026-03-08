@@ -24,6 +24,7 @@ __all__ = [
     "ScoreConfidenceModel",
     "ScanHistoryEntry",
     "SubjectiveAssessment",
+    "SubjectiveAssessmentJudgment",
     "SubjectiveIntegrity",
     "LangCapability",
     "ReviewCacheModel",
@@ -178,6 +179,14 @@ class SubjectiveIntegrity(TypedDict, total=False):
     reset_dimensions: list[str]
 
 
+class SubjectiveAssessmentJudgment(TypedDict, total=False):
+    """Reviewer's holistic judgment narrative for a subjective dimension."""
+
+    strengths: list[str]
+    issue_character: str
+    score_rationale: str
+
+
 class SubjectiveAssessment(TypedDict, total=False):
     """A single subjective dimension assessment payload."""
 
@@ -194,6 +203,7 @@ class SubjectiveAssessment(TypedDict, total=False):
     needs_review_refresh: bool
     refresh_reason: str | None
     stale_since: str | None
+    judgment: SubjectiveAssessmentJudgment
 
 
 class ConcernDismissal(TypedDict, total=False):

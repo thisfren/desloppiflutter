@@ -59,6 +59,7 @@ def import_holistic_issues(
     issues_list = payload.issues
     assessments = payload.assessments
     reviewed_files = payload.reviewed_files
+    dimension_judgment = payload.dimension_judgment
     review_scope = issues_data.get("review_scope", {})
     if not isinstance(review_scope, dict):
         review_scope = {}
@@ -73,6 +74,7 @@ def import_holistic_issues(
             assessments,
             source="holistic",
             utc_now_fn=utc_now_fn,
+            dimension_judgment=dimension_judgment,
         )
 
     _, holistic_prompts, _ = load_dimensions_for_lang(lang_name)

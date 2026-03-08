@@ -343,6 +343,11 @@ def render_task_requirements(*, issues_cap: int, dim_set: set[str]) -> str:
         for focus_line in dim_focus.rstrip("\n").split("\n"):
             lines.append(f"{next_num}. {focus_line.lstrip('0123456789abcdefghij. ')}")
             next_num += 1
+    lines.append(
+        f"{next_num}. Complete `dimension_judgment` for your dimension — all three fields "
+        "(strengths, issue_character, score_rationale) are required. Write the judgment BEFORE setting the score."
+    )
+    next_num += 1
     lines.append(f"{next_num}. Do not edit repository files.")
     next_num += 1
     lines.append(f"{next_num}. Return ONLY valid JSON, no markdown fences.")

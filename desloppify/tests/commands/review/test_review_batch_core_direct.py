@@ -242,7 +242,7 @@ def test_normalize_batch_result_rejects_low_score_without_same_dimension_issue()
 
 
 def test_normalize_batch_result_accepts_low_score_with_same_dimension_issue():
-    assessments, issues, _notes, _quality = batch_core_mod.normalize_batch_result(
+    assessments, issues, _notes, _judgment, _quality = batch_core_mod.normalize_batch_result(
         payload={
             "assessments": {"logic_clarity": LOW_SCORE_ISSUE_THRESHOLD - 10.0},
             "dimension_notes": {
@@ -277,7 +277,7 @@ def test_normalize_batch_result_accepts_low_score_with_same_dimension_issue():
 
 
 def test_normalize_batch_result_accepts_legacy_findings_alias():
-    assessments, issues, _notes, _quality = batch_core_mod.normalize_batch_result(
+    assessments, issues, _notes, _judgment, _quality = batch_core_mod.normalize_batch_result(
         payload={
             "assessments": {"logic_clarity": 80.0},
             "dimension_notes": {
@@ -313,7 +313,7 @@ def test_normalize_batch_result_accepts_legacy_findings_alias():
 
 
 def test_normalize_batch_result_accepts_legacy_unreported_risk_key():
-    _assessments, _issues, notes, _quality = batch_core_mod.normalize_batch_result(
+    _assessments, _issues, notes, _judgment, _quality = batch_core_mod.normalize_batch_result(
         payload={
             "assessments": {"logic_clarity": 90.0},
             "dimension_notes": {

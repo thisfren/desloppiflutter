@@ -15,6 +15,7 @@ from desloppify.intelligence.review.issue_merge import (
 )
 
 from .core import (
+    BatchDimensionJudgmentPayload,
     BatchDimensionNotePayload,
     BatchIssuePayload,
     BatchResultPayload,
@@ -141,6 +142,7 @@ def merge_batch_results(
     score_raw_by_dim: dict[str, list[float]] = {}
     all_issues: list[BatchIssuePayload] = []
     merged_dimension_notes: dict[str, BatchDimensionNotePayload] = {}
+    merged_dimension_judgment: dict[str, BatchDimensionJudgmentPayload] = {}
     coverage_values: list[float] = []
     evidence_density_values: list[float] = []
     high_score_missing_issue_note_total = 0.0
@@ -163,6 +165,10 @@ def merge_batch_results(
             coverage_values=coverage_values,
             evidence_density_values=evidence_density_values,
         )
+        # Collect dimension_judgment — each batch covers one dimension, no conflicts
+        for dim_key, judgment in result.get("dimension_judgment", {}).items():
+            if isinstance(judgment, dict) and dim_key not in merged_dimension_judgment:
+                merged_dimension_judgment[dim_key] = cast(BatchDimensionJudgmentPayload, judgment)
 
     merged_issues = _merge_issues_transitively(all_issues)
     issue_pressure_by_dim, issue_count_by_dim = _issue_pressure_by_dimension(
@@ -193,6 +199,7 @@ def merge_batch_results(
     return {
         "assessments": merged_assessment_payload,
         "dimension_notes": merged_dimension_notes,
+        "dimension_judgment": merged_dimension_judgment,
         "issues": merged_issues,
         "review_quality": {
             "batch_count": len(batch_results),

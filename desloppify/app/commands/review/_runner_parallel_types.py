@@ -37,13 +37,15 @@ class BatchResult:
     batch_index: int
     assessments: dict[str, float]
     dimension_notes: dict[str, dict[str, Any]]
-    issues: list[dict[str, Any]]
-    quality: dict[str, float]
+    dimension_judgment: dict[str, dict[str, Any]] = field(default_factory=dict)
+    issues: list[dict[str, Any]] = field(default_factory=list)
+    quality: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "assessments": self.assessments,
             "dimension_notes": self.dimension_notes,
+            "dimension_judgment": self.dimension_judgment,
             "issues": self.issues,
             "quality": self.quality,
         }

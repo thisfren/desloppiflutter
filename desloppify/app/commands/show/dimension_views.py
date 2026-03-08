@@ -25,6 +25,31 @@ def _print_dimension_score(dim_data: dict, display_name: str) -> None:
         )
 
 
+def _render_judgment(state: dict, dimension_key: str) -> None:
+    """Print judgment narrative (strengths, issue_character, score_rationale) if available."""
+    assessments = state.get("subjective_assessments", {})
+    assessment = assessments.get(dimension_key, {})
+    if not isinstance(assessment, dict):
+        return
+    judgment = assessment.get("judgment")
+    if not isinstance(judgment, dict):
+        return
+
+    score_rationale = judgment.get("score_rationale", "")
+    if score_rationale:
+        print(colorize(f"  Score rationale: {score_rationale}", "dim"))
+
+    strengths = judgment.get("strengths", [])
+    if isinstance(strengths, list) and strengths:
+        print(colorize("  Strengths:", "dim"))
+        for s in strengths:
+            print(colorize(f"    - {s}", "dim"))
+
+    issue_character = judgment.get("issue_character", "")
+    if issue_character:
+        print(colorize(f"  Issue character: {issue_character}", "dim"))
+
+
 def _render_subjective_dimension(
     state: dict,
     config: dict,
@@ -35,6 +60,7 @@ def _render_subjective_dimension(
     lowered = pattern_raw.strip().lower().replace(" ", "_") if pattern_raw else ""
     dim_data, display_name = _lookup_dimension_score(state, entity.display_name)
     _print_dimension_score(dim_data, display_name)
+    _render_judgment(state, lowered)
     print(
         colorize(
             f"  '{pattern_raw.strip()}' is a subjective dimension "

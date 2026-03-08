@@ -83,6 +83,7 @@ def test_collect_batch_results_recovers_from_log_stdout_payload(tmp_path: Path) 
             parsed.get("assessments", {}),
             parsed.get("issues", []),
             parsed.get("dimension_notes", {}),
+            parsed.get("dimension_judgment", {}),
             {},
         ),
     )

@@ -131,7 +131,7 @@ def collect_batch_results(
             except OSError as exc:
                 logger.warning("Failed writing normalized batch payload %s: %s", raw_path, exc)
         try:
-            assessments, issues, dimension_notes, quality = normalize_result_fn(
+            assessments, issues, dimension_notes, dimension_judgment, quality = normalize_result_fn(
                 payload,
                 allowed_dims,
             )
@@ -146,6 +146,7 @@ def collect_batch_results(
                 batch_index=idx + 1,
                 assessments=assessments,
                 dimension_notes=dimension_notes,
+                dimension_judgment=dimension_judgment,
                 issues=issues,
                 quality=quality,
             )

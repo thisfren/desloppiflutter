@@ -58,6 +58,13 @@ def _render_output_schema(context: PromptBatchContext, batch_index: int) -> str:
         '      "sub_axes": {"abstraction_leverage": 0-100, "indirection_cost": 0-100, "interface_honesty": 0-100, "delegation_density": 0-100, "definition_directness": 0-100, "type_discipline": 0-100}  // required for abstraction_fitness when evidence supports it; all one decimal place\n'
         "    }\n"
         "  },\n"
+        '  "dimension_judgment": {\n'
+        '    "<dimension>": {\n'
+        '      "strengths": ["0-5 specific things the codebase does well from this dimension\'s perspective"],\n'
+        '      "issue_character": "one sentence characterizing the nature/pattern of issues from this dimension\'s perspective",\n'
+        '      "score_rationale": "2-3 sentences explaining the score from this dimension\'s perspective, referencing global anchors"\n'
+        "    }\n"
+        "  },\n"
         '  "issues": [{\n'
         '    "dimension": "<dimension>",\n'
         '    "identifier": "short_id",\n'

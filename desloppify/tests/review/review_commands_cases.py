@@ -1923,7 +1923,7 @@ class TestCmdReviewPrepare:
 
         def normalize_result(payload, _allowed_dims):
             notes = payload.get("dimension_notes", {})
-            return payload.get("assessments", {}), payload.get("issues", []), notes, {}
+            return payload.get("assessments", {}), payload.get("issues", []), notes, {}, {}
 
         batch_results, failures = runner_helpers_mod.collect_batch_results(
             selected_indexes=[0],
@@ -1983,6 +1983,7 @@ class TestCmdReviewPrepare:
                 payload.get("assessments", {}),
                 payload.get("issues", []),
                 payload.get("dimension_notes", {}),
+                payload.get("dimension_judgment", {}),
                 {},
             ),
         )
