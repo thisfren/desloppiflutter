@@ -127,6 +127,112 @@ def _merge_issue_details(
     track_merged_from(primary_detail, duplicate.get("id", ""))
 
 
+def _resolve_similarity(raw_similarity: object) -> float:
+    """Parse and clamp merge similarity threshold."""
+    try:
+        value = float(raw_similarity)
+    except (TypeError, ValueError):
+        value = 0.8
+    return max(0.0, min(1.0, value))
+
+
+def _open_holistic_review_items(
+    items: list[ReviewIssueStatePayload],
+) -> list[ReviewIssueStatePayload]:
+    """Return open holistic review issues eligible for conceptual merge."""
+    return [
+        issue
+        for issue in items
+        if issue.get("detector") == "review"
+        and issue.get("detail", {}).get("holistic")
+    ]
+
+
+def _group_duplicate_issue_concepts(
+    open_holistic: list[ReviewIssueStatePayload],
+    *,
+    similarity_threshold: float,
+) -> list[list[ReviewIssueStatePayload]]:
+    """Group conceptually duplicate holistic issues."""
+    consumed: set[str] = set()
+    merge_groups: list[list[ReviewIssueStatePayload]] = []
+    for candidate in open_holistic:
+        candidate_id = candidate.get("id", "")
+        if not candidate_id or candidate_id in consumed:
+            continue
+        group = [candidate]
+        consumed.add(candidate_id)
+        for other in open_holistic:
+            other_id = other.get("id", "")
+            if not other_id or other_id in consumed:
+                continue
+            if not _same_issue_concept(
+                candidate,
+                other,
+                similarity_threshold=similarity_threshold,
+            ):
+                continue
+            consumed.add(other_id)
+            group.append(other)
+        if len(group) > 1:
+            merge_groups.append(group)
+    return merge_groups
+
+
+def _apply_merge_group(
+    *,
+    group: list[ReviewIssueStatePayload],
+    dry_run: bool,
+    timestamp: str,
+) -> tuple[str, list[str]]:
+    """Apply one merge group and return primary/duplicate IDs."""
+    ranked = sorted(
+        group,
+        key=lambda issue: (issue_weight(issue)[0], issue.get("id", "")),
+        reverse=True,
+    )
+    primary = ranked[0]
+    duplicates = ranked[1:]
+    pair = (primary.get("id", ""), [d.get("id", "") for d in duplicates])
+    if dry_run:
+        return pair
+    for duplicate in duplicates:
+        _merge_issue_details(primary, duplicate)
+        duplicate["status"] = "auto_resolved"
+        duplicate["resolved_at"] = timestamp
+        duplicate["note"] = f"merged into {primary.get('id', '')}"
+        duplicate["resolution_attestation"] = {
+            "kind": "issue_merge",
+            "text": "Merged conceptually duplicate review issue",
+            "attested_at": timestamp,
+            "scan_verified": False,
+        }
+    primary_detail = primary.setdefault("detail", {})
+    primary_detail["merged_at"] = timestamp
+    return pair
+
+
+def _print_merge_group_summary(
+    *,
+    merge_groups: list[list[ReviewIssueStatePayload]],
+    merged_pairs: list[tuple[str, list[str]]],
+) -> None:
+    """Render merge results and per-group preview."""
+    duplicates_merged = sum(len(group) - 1 for group in merge_groups)
+    print(
+        colorize(
+            f"\n  Merge groups: {len(merge_groups)} | duplicate issues: {duplicates_merged}",
+            "bold",
+        )
+    )
+    for index, (primary_id, duplicate_ids) in enumerate(merged_pairs, 1):
+        preview = ", ".join(duplicate_ids[:3])
+        if len(duplicate_ids) > 3:
+            preview = f"{preview}, +{len(duplicate_ids) - 3} more"
+        print(colorize(f"  [{index}] keep {primary_id}", "dim"))
+        print(colorize(f"      merge {preview}", "dim"))
+
+
 def do_merge(args: argparse.Namespace) -> None:
     """Merge conceptually duplicate open review issues."""
     runtime = command_runtime(args)
@@ -141,44 +247,16 @@ def do_merge(args: argparse.Namespace) -> None:
         print(colorize("\n  No review issues open.\n", "dim"))
         return
 
-    try:
-        similarity = float(getattr(args, "similarity", 0.8))
-    except (TypeError, ValueError):
-        similarity = 0.8
-    similarity = max(0.0, min(1.0, similarity))
-
-    open_holistic = [
-        issue
-        for issue in items
-        if issue.get("detector") == "review"
-        and issue.get("detail", {}).get("holistic")
-    ]
+    similarity = _resolve_similarity(getattr(args, "similarity", 0.8))
+    open_holistic = _open_holistic_review_items(items)
     if len(open_holistic) < 2:
         print(colorize("\n  Not enough holistic review issues to merge.\n", "dim"))
         return
 
-    consumed: set[str] = set()
-    merge_groups: list[list[ReviewIssueStatePayload]] = []
-    for candidate in open_holistic:
-        candidate_id = candidate.get("id", "")
-        if not candidate_id or candidate_id in consumed:
-            continue
-        group = [candidate]
-        consumed.add(candidate_id)
-        for other in open_holistic:
-            other_id = other.get("id", "")
-            if not other_id or other_id in consumed:
-                continue
-            if _same_issue_concept(
-                candidate,
-                other,
-                similarity_threshold=similarity,
-            ):
-                consumed.add(other_id)
-                group.append(other)
-        if len(group) > 1:
-            merge_groups.append(group)
-
+    merge_groups = _group_duplicate_issue_concepts(
+        open_holistic,
+        similarity_threshold=similarity,
+    )
     if not merge_groups:
         print(
             colorize(
@@ -193,43 +271,14 @@ def do_merge(args: argparse.Namespace) -> None:
     timestamp = utc_now()
     merged_pairs: list[tuple[str, list[str]]] = []
     for group in merge_groups:
-        ranked = sorted(
-            group,
-            key=lambda issue: (issue_weight(issue)[0], issue.get("id", "")),
-            reverse=True,
+        merged_pairs.append(
+            _apply_merge_group(
+                group=group,
+                dry_run=dry_run,
+                timestamp=timestamp,
+            )
         )
-        primary = ranked[0]
-        duplicates = ranked[1:]
-        merged_pairs.append((primary.get("id", ""), [d.get("id", "") for d in duplicates]))
-        if dry_run:
-            continue
-        for duplicate in duplicates:
-            _merge_issue_details(primary, duplicate)
-            duplicate["status"] = "auto_resolved"
-            duplicate["resolved_at"] = timestamp
-            duplicate["note"] = f"merged into {primary.get('id', '')}"
-            duplicate["resolution_attestation"] = {
-                "kind": "issue_merge",
-                "text": "Merged conceptually duplicate review issue",
-                "attested_at": timestamp,
-                "scan_verified": False,
-            }
-        primary_detail = primary.setdefault("detail", {})
-        primary_detail["merged_at"] = timestamp
-
-    print(
-        colorize(
-            f"\n  Merge groups: {len(merge_groups)} | "
-            f"duplicate issues: {sum(len(group) - 1 for group in merge_groups)}",
-            "bold",
-        )
-    )
-    for index, (primary_id, duplicate_ids) in enumerate(merged_pairs, 1):
-        preview = ", ".join(duplicate_ids[:3])
-        if len(duplicate_ids) > 3:
-            preview = f"{preview}, +{len(duplicate_ids) - 3} more"
-        print(colorize(f"  [{index}] keep {primary_id}", "dim"))
-        print(colorize(f"      merge {preview}", "dim"))
+    _print_merge_group_summary(merge_groups=merge_groups, merged_pairs=merged_pairs)
 
     if dry_run:
         print(colorize("\n  Dry run only: no state changes written.\n", "yellow"))

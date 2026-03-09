@@ -134,6 +134,34 @@ def render_historical_focus(batch: dict[str, object]) -> str:
     return "\n".join(lines) + "\n\n"
 
 
+def _concern_signal_lines(entry: dict[str, object]) -> list[str]:
+    """Render one concern signal entry into prompt lines."""
+    file = str(entry.get("file", "")).strip() or "(unknown file)"
+    concern_type = str(entry.get("type", "")).strip() or "design_concern"
+    summary = str(entry.get("summary", "")).strip()
+    question = str(entry.get("question", "")).strip()
+    evidence_raw = entry.get("evidence", [])
+    evidence = (
+        [str(item).strip() for item in evidence_raw if isinstance(item, str) and item.strip()]
+        if isinstance(evidence_raw, list)
+        else []
+    )
+    lines = [f"  - [{concern_type}] {file}"]
+    if summary:
+        lines.append(f"    summary: {summary}")
+    if question:
+        lines.append(f"    question: {question}")
+    lines.extend(f"    evidence: {snippet}" for snippet in evidence[:2])
+    return lines
+
+
+def _iter_valid_concern_signals(
+    signals: list[object],
+) -> list[dict[str, object]]:
+    """Filter signal entries to mapping payloads only."""
+    return [entry for entry in signals if isinstance(entry, dict)]
+
+
 def render_mechanical_concern_signals(batch: dict[str, object]) -> str:
     """Render mechanically-generated concern hypotheses for this batch."""
     signals = batch.get("concern_signals")
@@ -146,33 +174,12 @@ def render_mechanical_concern_signals(batch: dict[str, object]) -> str:
         "Confirm or refute each with your own code reading. Report only confirmed defects."
     )
 
-    shown = 0
-    for entry in signals:
-        if not isinstance(entry, dict):
-            continue
-        file = str(entry.get("file", "")).strip() or "(unknown file)"
-        concern_type = str(entry.get("type", "")).strip() or "design_concern"
-        summary = str(entry.get("summary", "")).strip()
-        question = str(entry.get("question", "")).strip()
-        evidence_raw = entry.get("evidence", [])
-        evidence = (
-            [str(item).strip() for item in evidence_raw if isinstance(item, str) and item.strip()]
-            if isinstance(evidence_raw, list)
-            else []
-        )
+    valid_signals = _iter_valid_concern_signals(signals)
+    capped_signals = valid_signals[:8]
+    for entry in capped_signals:
+        lines.extend(_concern_signal_lines(entry))
 
-        lines.append(f"  - [{concern_type}] {file}")
-        if summary:
-            lines.append(f"    summary: {summary}")
-        if question:
-            lines.append(f"    question: {question}")
-        for snippet in evidence[:2]:
-            lines.append(f"    evidence: {snippet}")
-        shown += 1
-        if shown >= 8:
-            break
-
-    extra = max(0, len(signals) - shown)
+    extra = max(0, len(valid_signals) - len(capped_signals))
     if extra:
         lines.append(f"  - (+{extra} more concern signals)")
     return "\n".join(lines) + "\n\n"
