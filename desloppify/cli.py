@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
+from collections.abc import Mapping
 from functools import lru_cache
-import argparse
+from typing import Any
+
 from desloppify.app.cli_support.parser import create_parser as _create_parser
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.runtime import CommandRuntime
 from desloppify.app.commands.helpers.state import state_path
-from desloppify.app.commands.registry import get_command_handlers
+from desloppify.app.commands.registry import CommandHandler, get_command_handlers
 from desloppify.base.config import load_config
 from desloppify.base.discovery.source import set_exclusions
 from desloppify.base.exception_sets import CommandError
@@ -40,7 +43,7 @@ class _DetectorNamesCacheCompat:
     def __setitem__(self, key: str, value: list[str]) -> None:
         self._store[key] = value
 
-    def pop(self, key: str, default=None):
+    def pop(self, key: str, default: list[str] | None = None) -> list[str] | None:
         return self._store.pop(key, default)
 
 
@@ -67,15 +70,23 @@ def _invalidate_detector_names_cache() -> None:
 on_detector_registered(_invalidate_detector_names_cache)
 
 
-def create_parser():
+def create_parser() -> argparse.ArgumentParser:
     """Return the top-level argparse parser."""
     return _create_parser(langs=available_langs(), detector_names=_get_detector_names())
 
 
-def _apply_persisted_exclusions(args, config: dict):
+def _apply_persisted_exclusions(
+    args: argparse.Namespace,
+    config: Mapping[str, Any],
+) -> None:
     """Merge CLI --exclude with persisted config.exclude and apply globally."""
     cli_exclusions = getattr(args, "exclude", None) or []
-    persisted = config.get("exclude", [])
+    persisted_raw = config.get("exclude", [])
+    persisted = (
+        [entry for entry in persisted_raw if isinstance(entry, str)]
+        if isinstance(persisted_raw, list)
+        else []
+    )
     combined = list(cli_exclusions) + [e for e in persisted if e not in cli_exclusions]
     if not combined:
         return
@@ -133,11 +144,15 @@ def _load_shared_runtime(args: argparse.Namespace) -> None:
     args.runtime = CommandRuntime(config=config, state=state, state_path=state_file)
 
 
-def _resolve_handler(command: str):
+def _resolve_handler(command: str) -> CommandHandler:
+    """Resolve a CLI command name to its typed handler callable."""
     return get_command_handlers()[command]
 
 
-def _handle_help_command(args, parser) -> None:
+def _handle_help_command(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
     """Handle explicit help command when present in parser config."""
     topic = list(getattr(args, "topic", []) or [])
     try:
