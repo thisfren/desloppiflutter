@@ -11,6 +11,7 @@ import desloppify.base.tooling as tooling_mod
 from desloppify.base.discovery.file_paths import (
     matches_exclusion,
     rel,
+    to_project_relative_path,
     resolve_path,
 )
 from desloppify.base.discovery.source import (
@@ -46,6 +47,7 @@ def test_rel_absolute_under_project_root(monkeypatch):
     root = paths_api_mod.get_project_root()
     abs_path = str(root / "foo" / "bar.py")
     assert rel(abs_path) == "foo/bar.py"
+    assert to_project_relative_path(abs_path) == "foo/bar.py"
 
 
 def test_rel_path_outside_project_root(tmp_path, monkeypatch):
@@ -61,6 +63,7 @@ def test_rel_path_outside_project_root(tmp_path, monkeypatch):
         # Windows cross-drive fallback: rel() should return absolute normalized path.
         expected = str(Path(outside).resolve()).replace("\\", "/")
     assert result == expected
+    assert to_project_relative_path(outside) == expected
 
 
 # ── resolve_path() ───────────────────────────────────────────
