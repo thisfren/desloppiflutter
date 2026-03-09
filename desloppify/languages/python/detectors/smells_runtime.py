@@ -187,6 +187,106 @@ def _detect_swallowed_errors(
             )
 
 
+def _read_smell_source_file(
+    filepath: str,
+    *,
+    logger,
+) -> tuple[str, list[str]] | None:
+    """Load one source file for smell detection."""
+    try:
+        file_path = (
+            Path(filepath) if Path(filepath).is_absolute() else get_project_root() / filepath
+        )
+        content = file_path.read_text()
+        return content, content.splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        log_best_effort_failure(
+            logger,
+            f"read Python file for smell scan {filepath}",
+            exc,
+        )
+        return None
+
+
+def _scan_file_patterns(
+    *,
+    filepath: str,
+    lines: list[str],
+    smell_checks: list[dict],
+    smell_counts: dict[str, list[dict]],
+) -> None:
+    """Run regex-based smell checks for one file."""
+    multiline_string_lines = build_string_line_set(lines)
+    for check in smell_checks:
+        pattern = check.get("pattern")
+        if pattern is None:
+            continue
+        for i, line in enumerate(lines):
+            if i in multiline_string_lines:
+                continue
+            match = re.search(pattern, line)
+            if not match or match_is_in_string(line, match.start()):
+                continue
+            if check["id"] == "hardcoded_url" and re.match(
+                r"^[A-Z_][A-Z0-9_]*\s*=",
+                line.strip(),
+            ):
+                continue
+            smell_counts[check["id"]].append(
+                {
+                    "file": filepath,
+                    "line": i + 1,
+                    "content": line.strip()[:100],
+                }
+            )
+
+
+def _run_semantic_detectors(
+    *,
+    filepath: str,
+    content: str,
+    lines: list[str],
+    project_path: Path,
+    smell_counts: dict[str, list[dict]],
+    constants_by_key: dict[tuple[str, str], list[tuple[str, int]]],
+) -> None:
+    """Run semantic smell detectors for one file."""
+    _detect_empty_except(filepath, lines, smell_counts)
+    _detect_swallowed_errors(filepath, lines, smell_counts)
+    detect_ast_smells(filepath, content, smell_counts)
+    detect_star_import_no_all(filepath, content, project_path, smell_counts)
+    detect_vestigial_parameter(filepath, content, lines, smell_counts)
+    collect_module_constants(filepath, content, constants_by_key)
+
+
+def _build_sorted_entries(
+    *,
+    smell_checks: list[dict],
+    smell_counts: dict[str, list[dict]],
+) -> list[dict]:
+    """Build sorted smell output entries from aggregate counts."""
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    entries: list[dict] = []
+    for check in smell_checks:
+        matches = smell_counts[check["id"]]
+        if not matches:
+            continue
+        entries.append(
+            {
+                "id": check["id"],
+                "label": check["label"],
+                "severity": check["severity"],
+                "count": len(matches),
+                "files": len(set(match["file"] for match in matches)),
+                "matches": matches[:50],
+            }
+        )
+    entries.sort(
+        key=lambda entry: (severity_order.get(entry["severity"], 9), -entry["count"])
+    )
+    return entries
+
+
 def detect_smells_runtime(
     path: Path,
     *,
@@ -200,73 +300,31 @@ def detect_smells_runtime(
     constants_by_key: dict[tuple[str, str], list[tuple[str, int]]] = {}
 
     for filepath in files:
-        try:
-            file_path = (
-                Path(filepath) if Path(filepath).is_absolute() else get_project_root() / filepath
-            )
-            content = file_path.read_text()
-            lines = content.splitlines()
-        except (OSError, UnicodeDecodeError) as exc:
-            log_best_effort_failure(
-                logger,
-                f"read Python file for smell scan {filepath}",
-                exc,
-            )
-            continue
-
         if is_test_path_fn(filepath):
             continue
-
-        multiline_string_lines = build_string_line_set(lines)
-
-        for check in smell_checks:
-            pattern = check.get("pattern")
-            if pattern is None:
-                continue
-            for i, line in enumerate(lines):
-                if i in multiline_string_lines:
-                    continue
-                match = re.search(pattern, line)
-                if match and not match_is_in_string(line, match.start()):
-                    if check["id"] == "hardcoded_url" and re.match(
-                        r"^[A-Z_][A-Z0-9_]*\s*=",
-                        line.strip(),
-                    ):
-                        continue
-                    smell_counts[check["id"]].append(
-                        {
-                            "file": filepath,
-                            "line": i + 1,
-                            "content": line.strip()[:100],
-                        }
-                    )
-
-        _detect_empty_except(filepath, lines, smell_counts)
-        _detect_swallowed_errors(filepath, lines, smell_counts)
-        detect_ast_smells(filepath, content, smell_counts)
-        detect_star_import_no_all(filepath, content, path, smell_counts)
-        detect_vestigial_parameter(filepath, content, lines, smell_counts)
-        collect_module_constants(filepath, content, constants_by_key)
+        loaded = _read_smell_source_file(filepath, logger=logger)
+        if loaded is None:
+            continue
+        content, lines = loaded
+        _scan_file_patterns(
+            filepath=filepath,
+            lines=lines,
+            smell_checks=smell_checks,
+            smell_counts=smell_counts,
+        )
+        _run_semantic_detectors(
+            filepath=filepath,
+            content=content,
+            lines=lines,
+            project_path=path,
+            smell_counts=smell_counts,
+            constants_by_key=constants_by_key,
+        )
 
     detect_duplicate_constants(constants_by_key, smell_counts)
-
-    severity_order = {"high": 0, "medium": 1, "low": 2}
-    entries = []
-    for check in smell_checks:
-        matches = smell_counts[check["id"]]
-        if matches:
-            entries.append(
-                {
-                    "id": check["id"],
-                    "label": check["label"],
-                    "severity": check["severity"],
-                    "count": len(matches),
-                    "files": len(set(match["file"] for match in matches)),
-                    "matches": matches[:50],
-                }
-            )
-    entries.sort(
-        key=lambda entry: (severity_order.get(entry["severity"], 9), -entry["count"])
+    entries = _build_sorted_entries(
+        smell_checks=smell_checks,
+        smell_counts=smell_counts,
     )
     return entries, len(files)
 
