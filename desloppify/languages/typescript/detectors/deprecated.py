@@ -8,22 +8,27 @@ import re
 from pathlib import Path
 from typing import Any
 
-from desloppify.base.discovery.file_paths import (
-
-    rel,
-
-    resolve_path,
-
-)
-
+from desloppify.base.discovery.file_paths import rel, resolve_path
 from desloppify.base.discovery.source import find_ts_files
+from desloppify.base.output.terminal import colorize, print_table
 from desloppify.base.output.fallbacks import log_best_effort_failure
 from desloppify.base.search.grep import grep_count_files, grep_files
-from desloppify.base.output.terminal import colorize, print_table
 from desloppify.base.signal_patterns import DEPRECATION_MARKER_RE
 from desloppify.languages.typescript.detectors.contracts import DetectorResult
 
 logger = logging.getLogger(__name__)
+
+_INLINE_PROPERTY_RE = re.compile(r"(\w+)\s*[?:=]")
+_INLINE_DECLARATION_RE = re.compile(
+    r"(?:export\s+)?(?:const|let|var|function|class|type|interface|enum)\s+(\w+)"
+)
+_DECLARATION_LINE_RE = re.compile(
+    r"(?:export\s+)?(?:declare\s+)?(?:const|let|var|function|class|type|interface|enum)\s+(\w+)"
+)
+_PROPERTY_LINE_RE = re.compile(r"(\w+)\s*[?:]")
+_DEPRECATED_TAG_RE = re.compile(r"@deprecated", re.IGNORECASE)
+
+
 def detect_deprecated_result(path: Path) -> DetectorResult[dict[str, Any]]:
     """Find deprecated symbols with explicit population semantics."""
     ts_files = find_ts_files(path)
@@ -74,76 +79,76 @@ def _extract_deprecated_symbol(
     *,
     scan_root: Path | None = None,
 ) -> tuple[str | None, str]:
-    """Extract the deprecated symbol name and whether it's a top-level or inline deprecation.
-
-    Returns (symbol_name, kind) where kind is "top-level" or "property".
-    """
+    """Extract the deprecated symbol name and its deprecation kind."""
     try:
         p = _resolve_source_file(filepath, scan_root=scan_root)
         lines = p.read_text().splitlines()
         content_stripped = content.strip()
 
-        # Case 1: Inline @deprecated on a property/field
-        # e.g., `/** @deprecated Use X instead */ fieldName?: Type;`
-        # or `/** @deprecated */ export const oldThing = ...`
         if "/**" in content_stripped and "*/" in content_stripped:
-            # This is a single-line JSDoc. Check what follows on the same or next line
-            after_jsdoc = content_stripped.split("*/", 1)[1].strip()
-            if after_jsdoc:
-                # Property on same line: `/** @deprecated */ someField?: string;`
-                m = re.match(r"(\w+)\s*[?:=]", after_jsdoc)
-                if m:
-                    return m.group(1), "property"
-                # Declaration on same line: `/** @deprecated */ export const foo`
-                m = re.match(
-                    r"(?:export\s+)?(?:const|let|var|function|class|type|interface|enum)\s+(\w+)",
-                    after_jsdoc,
-                )
-                if m:
-                    return m.group(1), "top-level"
+            inline_jsdoc = content_stripped.split("*/", 1)[1].strip()
+            if inline_jsdoc:
+                inline_match = _match_inline_deprecated_target(inline_jsdoc)
+                if inline_match is not None:
+                    return inline_match
 
-        # Case 2: @deprecated inside a multi-line JSDoc block — check if it's on a property
-        # We need to look ahead to find what this annotates
-        for offset in range(1, 8):
-            idx = lineno - 1 + offset
-            if idx >= len(lines):
-                break
-            src = lines[idx].strip()
-            # Skip empty lines, comment continuations, closing comment
-            if not src or src.startswith("*") or src.startswith("//"):
-                continue
-            # Top-level declaration
-            m = re.match(
-                r"(?:export\s+)?(?:declare\s+)?(?:const|let|var|function|class|type|interface|enum)\s+(\w+)",
-                src,
-            )
-            if m:
-                return m.group(1), "top-level"
-            # Property/field: `fieldName?: Type;` or `fieldName: Type;`
-            m = re.match(r"(\w+)\s*[?:]", src)
-            if m:
-                return m.group(1), "property"
-            break
+        scanned_line = _scan_following_declaration_line(lines, lineno)
+        if scanned_line is not None:
+            return scanned_line
 
-        # Case 3: @deprecated as inline comment on same line
-        # e.g., `shotImageEntryId?: string; // @deprecated`
-        # Check the current line for a preceding field name
-        if "//" in content_stripped or "*" in content_stripped:
-            # Look at the same line before the @deprecated
-            marker_match = re.search(r"@deprecated", content_stripped, re.IGNORECASE)
-            line_before = content_stripped
-            if marker_match:
-                line_before = content_stripped[: marker_match.start()]
-            line_before = line_before.strip().rstrip("/*").rstrip("*").strip()
-            m = re.search(r"(\w+)\s*[?:]", line_before)
-            if m:
-                return m.group(1), "property"
+        inline_comment_symbol = _match_inline_comment_property(content_stripped)
+        if inline_comment_symbol is not None:
+            return inline_comment_symbol, "property"
 
     except (OSError, UnicodeDecodeError) as exc:
         log_best_effort_failure(
             logger, f"read deprecated source context {filepath}", exc
         )
     return None, "unknown"
+
+
+def _match_inline_deprecated_target(line: str) -> tuple[str, str] | None:
+    property_match = _INLINE_PROPERTY_RE.match(line)
+    if property_match:
+        return property_match.group(1), "property"
+    declaration_match = _INLINE_DECLARATION_RE.match(line)
+    if declaration_match:
+        return declaration_match.group(1), "top-level"
+    return None
+
+
+def _scan_following_declaration_line(
+    lines: list[str],
+    lineno: int,
+) -> tuple[str, str] | None:
+    for offset in range(1, 8):
+        idx = lineno - 1 + offset
+        if idx >= len(lines):
+            break
+        src = lines[idx].strip()
+        if not src or src.startswith("*") or src.startswith("//"):
+            continue
+        declaration_match = _DECLARATION_LINE_RE.match(src)
+        if declaration_match:
+            return declaration_match.group(1), "top-level"
+        property_match = _PROPERTY_LINE_RE.match(src)
+        if property_match:
+            return property_match.group(1), "property"
+        break
+    return None
+
+
+def _match_inline_comment_property(content: str) -> str | None:
+    if "//" not in content and "*" not in content:
+        return None
+    tag_match = _DEPRECATED_TAG_RE.search(content)
+    if tag_match is None:
+        return None
+    line_before = content[: tag_match.start()].strip().rstrip("/*").rstrip("*").strip()
+    property_match = _PROPERTY_LINE_RE.search(line_before)
+    if property_match:
+        return property_match.group(1)
+    return None
 
 
 def _resolve_source_file(filepath: str, *, scan_root: Path | None) -> Path:
