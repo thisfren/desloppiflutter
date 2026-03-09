@@ -39,9 +39,7 @@ def assessment_weight(
     note = dimension_notes.get(dimension, {})
     note_evidence = len(note.get("evidence", [])) if isinstance(note, dict) else 0
     issue_count = sum(
-        1
-        for issue in issues
-        if str(issue.get("dimension", "")).strip() == dimension
+        1 for issue in issues if issue["dimension"].strip() == dimension
     )
     return float(1 + note_evidence + issue_count)
 
@@ -68,9 +66,9 @@ def _accumulate_batch_scores(
     abstraction_sub_axes: tuple[str, ...],
 ) -> None:
     """Accumulate assessment scores, dimension notes, and sub-axis data from one batch."""
-    result_issues = result.get("issues", [])
-    result_notes = result.get("dimension_notes", {})
-    for key, score in result.get("assessments", {}).items():
+    result_issues = result["issues"]
+    result_notes = result["dimension_notes"]
+    for key, score in result["assessments"].items():
         if isinstance(score, bool):
             continue
         score_value = float(score)
@@ -109,11 +107,11 @@ def _accumulate_batch_scores(
 
 def _issue_identity_key(issue: BatchIssuePayload) -> str:
     """Build a stable concept key; prefer dimension+identifier when available."""
-    dim = str(issue.get("dimension", "")).strip()
-    ident = str(issue.get("identifier", "")).strip()
+    dim = issue["dimension"].strip()
+    ident = issue["identifier"].strip()
     if ident:
         return f"{dim}::{ident}"
-    summary = str(issue.get("summary", "")).strip()
+    summary = issue["summary"].strip()
     summary_terms = sorted(normalize_word_set(summary))
     if summary_terms:
         return f"{dim}::summary::{','.join(summary_terms[:8])}"
@@ -128,7 +126,7 @@ def _merge_issue_payload(
     merge_list_fields(existing, incoming, ("related_files", "evidence"))
     pick_longer_text(existing, incoming, "summary")
     pick_longer_text(existing, incoming, "suggestion")
-    track_merged_from(existing, str(incoming.get("identifier", "")).strip())
+    track_merged_from(existing, incoming["identifier"].strip())
 
 
 def _should_merge_issues(
@@ -136,15 +134,15 @@ def _should_merge_issues(
     incoming: BatchIssuePayload,
 ) -> bool:
     """Check whether two key-matched issues are similar enough to merge."""
-    existing_summary = normalize_word_set(str(existing.get("summary", "")))
-    incoming_summary = normalize_word_set(str(incoming.get("summary", "")))
+    existing_summary = normalize_word_set(existing["summary"])
+    incoming_summary = normalize_word_set(incoming["summary"])
     if existing_summary and incoming_summary:
         overlap = len(existing_summary & incoming_summary)
         union = len(existing_summary | incoming_summary)
         if union and overlap / union >= 0.3:
             return True
-    existing_files = set(cast(list[str], existing.get("related_files", [])))
-    incoming_files = set(cast(list[str], incoming.get("related_files", [])))
+    existing_files = set(cast(list[str], existing["related_files"]))
+    incoming_files = set(cast(list[str], incoming["related_files"]))
     if existing_files and incoming_files:
         return bool(existing_files & incoming_files)
     return not existing_summary or not incoming_summary
@@ -157,7 +155,7 @@ def _accumulate_batch_quality(
     evidence_density_values: list[float],
 ) -> float:
     """Accumulate quality metrics from one batch. Returns high-score-missing-issues delta."""
-    quality: object = result.get("quality", {})
+    quality: object = result["quality"]
     if not isinstance(quality, dict):
         return 0.0
     coverage = quality.get("dimension_coverage")

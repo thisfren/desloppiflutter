@@ -1263,6 +1263,7 @@ class TestCmdReviewPrepare:
                             "assessments": {"mid_level_elegance": 78.0},
                             "dimension_notes": {},
                             "issues": [],
+                            "quality": {},
                         }
                     ],
                     [],
@@ -2317,7 +2318,17 @@ class TestCmdReviewPrepare:
             ),
             patch(
                 "desloppify.app.commands.review.batch.orchestrator.collect_batch_results",
-                return_value=([{"assessments": {}, "dimension_notes": {}, "issues": []}], []),
+                return_value=(
+                    [
+                        {
+                            "assessments": {},
+                            "dimension_notes": {},
+                            "issues": [],
+                            "quality": {},
+                        }
+                    ],
+                    [],
+                ),
             ),
             patch(
                 "desloppify.app.commands.review.batch.orchestrator._merge_batch_results",
