@@ -4,25 +4,49 @@ Output is clustered: N similar functions produce 1 entry (not N^2/2 pairwise ent
 Each entry contains a representative pair for display plus the full cluster membership.
 """
 
+from __future__ import annotations
+
 import difflib
 import os
 import sys
 import time
+from typing import TypeAlias, TypedDict
+
+from desloppify.engine.detectors.base import FunctionInfo
+
+PairKey: TypeAlias = tuple[str, str]
+MatchedPair: TypeAlias = tuple[int, int, float, str]
+
+
+class DuplicateMember(TypedDict):
+    file: str
+    name: str
+    line: int
+    loc: int
+
+
+class DuplicateEntry(TypedDict):
+    fn_a: DuplicateMember
+    fn_b: DuplicateMember
+    similarity: float
+    kind: str
+    cluster_size: int
+    cluster: list[DuplicateMember]
 
 
 def _build_clusters(
-    pairs: list[tuple[int, int, float, str]], n: int
+    pairs: list[MatchedPair], n: int
 ) -> list[list[int]]:
     """Union-find clustering from pairwise matches. Returns list of clusters (size >= 2)."""
     parent = list(range(n))
 
-    def find(x):
+    def find(x: int) -> int:
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
 
-    def union(a, b):
+    def union(a: int, b: int) -> None:
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[ra] = rb
@@ -54,9 +78,9 @@ def _dupes_debug_settings() -> tuple[bool, int]:
     return debug, debug_every
 
 
-def _pair_key(fn_a, fn_b) -> tuple[str, str]:
+def _pair_key(fn_a: FunctionInfo, fn_b: FunctionInfo) -> PairKey:
     """Build a stable pair key for duplicate tracking."""
-    def _identity(fn) -> str:
+    def _identity(fn: FunctionInfo) -> str:
         end_line = getattr(fn, "end_line", None)
         if not isinstance(end_line, int):
             end_line = int(getattr(fn, "line", 0)) + int(getattr(fn, "loc", 0))
@@ -66,14 +90,15 @@ def _pair_key(fn_a, fn_b) -> tuple[str, str]:
 
 
 def _collect_exact_duplicate_pairs(
-    functions, seen_pairs: set[tuple[str, str]]
-) -> list[tuple[int, int, float, str]]:
+    functions: list[FunctionInfo],
+    seen_pairs: set[PairKey],
+) -> list[MatchedPair]:
     """Collect exact duplicate pairs (same normalized body hash)."""
     by_hash: dict[str, list[int]] = {}
     for idx, fn in enumerate(functions):
         by_hash.setdefault(fn.body_hash, []).append(idx)
 
-    exact_pairs: list[tuple[int, int, float, str]] = []
+    exact_pairs: list[MatchedPair] = []
     for idxs in by_hash.values():
         if len(idxs) < 2:
             continue
@@ -90,20 +115,20 @@ def _collect_exact_duplicate_pairs(
 
 
 def _collect_near_duplicate_pairs(
-    functions,
+    functions: list[FunctionInfo],
     threshold: float,
     *,
-    seen_pairs: set[tuple[str, str]],
+    seen_pairs: set[PairKey],
     debug: bool,
     debug_every: int,
-) -> list[tuple[int, int, float, str]]:
+) -> list[MatchedPair]:
     """Collect near-duplicate pairs using SequenceMatcher with pruning."""
     large_idx = [(idx, fn) for idx, fn in enumerate(functions) if fn.loc >= 15]
     large_idx.sort(key=lambda item: item[1].loc)
     normalized_lines = [fn.normalized.splitlines() for fn in functions]
     normalized_line_counts = [len(lines) for lines in normalized_lines]
 
-    near_pairs: list[tuple[int, int, float, str]] = []
+    near_pairs: list[MatchedPair] = []
     near_candidates = 0
     near_ratio_calls = 0
     near_pruned_by_length = 0
@@ -178,15 +203,17 @@ def _collect_near_duplicate_pairs(
 
 
 def _build_duplicate_entries(
-    functions, pairs: list[tuple[int, int, float, str]], clusters: list[list[int]]
-) -> list[dict]:
+    functions: list[FunctionInfo],
+    pairs: list[MatchedPair],
+    clusters: list[list[int]],
+) -> list[DuplicateEntry]:
     """Build cluster entries from matched duplicate pairs."""
     pair_lookup: dict[int, dict[int, tuple[float, str]]] = {}
     for i, j, similarity, kind in pairs:
         pair_lookup.setdefault(i, {})[j] = (similarity, kind)
         pair_lookup.setdefault(j, {})[i] = (similarity, kind)
 
-    entries = []
+    entries: list[DuplicateEntry] = []
     for cluster in clusters:
         best_similarity = 0.0
         best_kind = "near-duplicate"
@@ -231,12 +258,15 @@ def _build_duplicate_entries(
     return entries
 
 
-def detect_duplicates(functions, threshold: float = 0.9) -> tuple[list[dict], int]:
+def detect_duplicates(
+    functions: list[FunctionInfo],
+    threshold: float = 0.9,
+) -> tuple[list[DuplicateEntry], int]:
     """Find duplicate or near-duplicate functions clustered by similarity."""
     if not functions:
         return [], 0
     debug, debug_every = _dupes_debug_settings()
-    seen_pairs: set[tuple[str, str]] = set()
+    seen_pairs: set[PairKey] = set()
 
     pairs = _collect_exact_duplicate_pairs(functions, seen_pairs)
     pairs.extend(
