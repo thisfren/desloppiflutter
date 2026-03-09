@@ -41,7 +41,13 @@ _RUNTIME = _RegistryRuntime(
 DETECTORS = _RUNTIME.detectors
 _DISPLAY_ORDER = _RUNTIME.display_order
 _on_register_callbacks = _RUNTIME.callbacks
-JUDGMENT_DETECTORS: frozenset[str] = _RUNTIME.judgment_detectors
+JUDGMENT_DETECTORS: set[str] = set(_RUNTIME.judgment_detectors)
+
+
+def _sync_judgment_detectors_alias() -> None:
+    """Keep exported JUDGMENT_DETECTORS aligned with runtime state."""
+    JUDGMENT_DETECTORS.clear()
+    JUDGMENT_DETECTORS.update(_RUNTIME.judgment_detectors)
 
 
 def on_detector_registered(callback: Callable[[], None]) -> None:
@@ -51,7 +57,6 @@ def on_detector_registered(callback: Callable[[], None]) -> None:
 
 def register_detector(meta: DetectorMeta) -> None:
     """Register a detector at runtime (used by generic plugins)."""
-    global JUDGMENT_DETECTORS
     _RUNTIME.detectors[meta.name] = meta
     if meta.name not in _RUNTIME.display_order:
         _RUNTIME.display_order.append(meta.name)
@@ -59,20 +64,19 @@ def register_detector(meta: DetectorMeta) -> None:
         name for name, current_meta in _RUNTIME.detectors.items()
         if current_meta.needs_judgment
     )
-    JUDGMENT_DETECTORS = _RUNTIME.judgment_detectors
+    _sync_judgment_detectors_alias()
     for callback in tuple(_RUNTIME.callbacks):
         callback()
 
 
 def reset_registered_detectors() -> None:
     """Reset runtime-added detector registrations to built-in defaults."""
-    global JUDGMENT_DETECTORS
     _RUNTIME.detectors.clear()
     _RUNTIME.detectors.update(_BASE_DETECTORS)
     _RUNTIME.display_order.clear()
     _RUNTIME.display_order.extend(_BASE_DISPLAY_ORDER)
     _RUNTIME.judgment_detectors = _BASE_JUDGMENT_DETECTORS
-    JUDGMENT_DETECTORS = _RUNTIME.judgment_detectors
+    _sync_judgment_detectors_alias()
     for callback in tuple(_RUNTIME.callbacks):
         callback()
 

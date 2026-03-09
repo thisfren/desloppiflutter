@@ -19,21 +19,18 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 
-# Ensure desloppify is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
+from desloppify.base.discovery.file_paths import safe_write_text
 from desloppify.base.subjective_dimensions import DISPLAY_NAMES
-from desloppify.engine._plan.operations_lifecycle import purge_ids
-from desloppify.engine._plan.schema import empty_plan
 from desloppify.engine._plan.constants import (
     TRIAGE_STAGE_IDS,
     WORKFLOW_COMMUNICATE_SCORE_ID,
     WORKFLOW_CREATE_PLAN_ID,
 )
+from desloppify.engine._plan.operations_lifecycle import purge_ids
+from desloppify.engine._plan.schema import empty_plan
 from desloppify.engine._plan.sync_dimensions import sync_unscored_dimensions
 from desloppify.engine._plan.sync_triage import sync_triage_needed
 from desloppify.engine._plan.sync_workflow import (
@@ -133,8 +130,8 @@ def _save(state: dict, plan: dict, state_dir: Path) -> None:
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / "state-python.json"
     plan_path = state_dir / "plan.json"
-    state_path.write_text(json.dumps(state, indent=2, default=str))
-    plan_path.write_text(json.dumps(plan, indent=2, default=str))
+    safe_write_text(state_path, json.dumps(state, indent=2, default=str))
+    safe_write_text(plan_path, json.dumps(plan, indent=2, default=str))
 
 
 def _pause(tmpdir: Path, stage: str, description: str) -> None:
@@ -145,7 +142,7 @@ def _pause(tmpdir: Path, stage: str, description: str) -> None:
     print(f"{'=' * 60}")
     print(f"  {description}")
     print()
-    print(f"  In another terminal, try:")
+    print("  In another terminal, try:")
     print(f"    DESLOPPIFY_ROOT={tmpdir} python -m desloppify --lang python next")
     print(f"    DESLOPPIFY_ROOT={tmpdir} python -m desloppify --lang python plan")
     print(f"    DESLOPPIFY_ROOT={tmpdir} python -m desloppify --lang python status")
@@ -164,9 +161,9 @@ def main() -> None:
     # Create minimal source files so scan_path resolves
     src = tmpdir / "src"
     src.mkdir()
-    (src / "app.py").write_text("def process_order(): pass\n")
-    (src / "util.py").write_text("def do_stuff(): pass\n")
-    (src / "helpers.py").write_text("import os.path\n")
+    safe_write_text(src / "app.py", "def process_order(): pass\n")
+    safe_write_text(src / "util.py", "def do_stuff(): pass\n")
+    safe_write_text(src / "helpers.py", "import os.path\n")
 
     # Initialize git so get_project_root() works
     os.system(f"git init -q {tmpdir}")

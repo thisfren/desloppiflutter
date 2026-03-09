@@ -8,11 +8,23 @@ from functools import lru_cache
 
 from desloppify.base.subjective_dimensions_constants import (
     DISPLAY_NAMES,
+)
+from desloppify.base.subjective_dimensions_constants import (
     LEGACY_DISPLAY_NAMES as _LEGACY_DISPLAY_NAMES,
+)
+from desloppify.base.subjective_dimensions_constants import (
     LEGACY_RESET_ON_SCAN_DIMENSIONS as _LEGACY_RESET_ON_SCAN_DIMENSIONS,
+)
+from desloppify.base.subjective_dimensions_constants import (
     LEGACY_WEIGHT_BY_DIMENSION as _LEGACY_WEIGHT_BY_DIMENSION,
+)
+from desloppify.base.subjective_dimensions_constants import (
     normalize_dimension_name as _normalize_dimension_name,
+)
+from desloppify.base.subjective_dimensions_constants import (
     normalize_lang_name as _normalize_lang_name,
+)
+from desloppify.base.subjective_dimensions_constants import (
     title_display_name as _title_display_name,
 )
 from desloppify.base.subjective_dimensions_merge import (
@@ -20,11 +32,23 @@ from desloppify.base.subjective_dimensions_merge import (
 )
 from desloppify.base.subjective_dimensions_providers import (
     PROVIDER_STATE as _PROVIDER_STATE,
+)
+from desloppify.base.subjective_dimensions_providers import (
     available_languages as _available_languages,
+)
+from desloppify.base.subjective_dimensions_providers import (
     default_available_languages as _default_available_languages,
+)
+from desloppify.base.subjective_dimensions_providers import (
     default_load_dimensions_payload as _default_load_dimensions_payload,
+)
+from desloppify.base.subjective_dimensions_providers import (
     default_load_dimensions_payload_for_lang as _default_load_dimensions_payload_for_lang,
+)
+from desloppify.base.subjective_dimensions_providers import (
     load_dimensions_payload as _load_dimensions_payload,
+)
+from desloppify.base.subjective_dimensions_providers import (
     load_dimensions_payload_for_lang as _load_dimensions_payload_for_lang,
 )
 from desloppify.base.text_utils import is_numeric
@@ -33,8 +57,6 @@ logger = logging.getLogger(__name__)
 
 
 def _clear_subjective_dimension_caches() -> None:
-    default_dimension_keys.cache_clear()
-    default_dimension_keys_for_lang.cache_clear()
     load_subjective_dimension_metadata.cache_clear()
     load_subjective_dimension_metadata_for_lang.cache_clear()
 
@@ -103,7 +125,6 @@ def _normalize_dimension_list(values: list[str]) -> tuple[str, ...]:
     return tuple(normalized)
 
 
-@lru_cache(maxsize=1)
 def default_dimension_keys() -> tuple[str, ...]:
     """Return canonical default subjective dimension keys."""
     try:
@@ -114,7 +135,6 @@ def default_dimension_keys() -> tuple[str, ...]:
     return _normalize_dimension_list(dims)
 
 
-@lru_cache(maxsize=16)
 def default_dimension_keys_for_lang(lang_name: str | None) -> tuple[str, ...]:
     """Return default subjective dimension keys for a specific language."""
     normalized = _normalize_lang_name(lang_name)
