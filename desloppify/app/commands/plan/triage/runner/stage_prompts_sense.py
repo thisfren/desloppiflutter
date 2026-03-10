@@ -11,6 +11,8 @@ def build_sense_check_content_prompt(
     plan: dict,
     repo_root: Path,
     policy_block: str = "",
+    mode: str = "output_only",
+    cli_command: str = "desloppify",
 ) -> str:
     """Build a content-verification prompt for a single cluster."""
     cluster = plan.get("clusters", {}).get(cluster_name, {})
@@ -24,11 +26,18 @@ def build_sense_check_content_prompt(
         f"Repo root: {repo_root}"
     )
 
-    parts.append(
-        "## Your job\n"
-        "For EVERY step in this cluster, read the actual source file and verify\n"
-        "every factual claim. Then fix anything wrong or vague.\n"
-    )
+    if mode == "self_record":
+        parts.append(
+            "## Your job\n"
+            "For EVERY step in this cluster, read the actual source file, verify\n"
+            "every factual claim, and apply the needed cluster-step updates directly.\n"
+        )
+    else:
+        parts.append(
+            "## Your job\n"
+            "For EVERY step in this cluster, read the actual source file and verify\n"
+            "every factual claim. Then fix anything wrong or vague.\n"
+        )
 
     parts.append(
         "## What to check and fix\n"
@@ -62,21 +71,45 @@ def build_sense_check_content_prompt(
     if policy_block:
         parts.append(policy_block)
 
-    parts.append(
-        "## How to report fixes\n"
-        "Describe the exact step corrections needed, including the corrected detail text,\n"
-        "the effort tag, and any stale/duplicate/over-engineered steps that should be removed.\n"
-        "The orchestrator will apply the updates.\n"
-    )
+    if mode == "self_record":
+        parts.append(
+            "## How to apply fixes\n"
+            f"Use the exact CLI prefix: `{cli_command}`\n"
+            "1. Inspect current state first:\n"
+            f"   `{cli_command} plan cluster show {cluster_name}`\n"
+            "2. Apply step corrections directly in this cluster:\n"
+            f"   `{cli_command} plan cluster update {cluster_name} --update-step N --detail \"...\" --effort <trivial|small|medium|large> --issue-refs <id...>`\n"
+            f"   `{cli_command} plan cluster update {cluster_name} --remove-step N`\n"
+            "3. Re-check the cluster after edits:\n"
+            f"   `{cli_command} plan cluster show {cluster_name}`\n"
+        )
+    else:
+        parts.append(
+            "## How to report fixes\n"
+            "Describe the exact step corrections needed, including the corrected detail text,\n"
+            "the effort tag, and any stale/duplicate/over-engineered steps that should be removed.\n"
+            "The orchestrator will apply the updates.\n"
+        )
 
-    parts.append(
-        "## What NOT to do\n"
-        "- Do NOT reorder steps (the structure subagent handles that)\n"
-        "- Do NOT add --depends-on (the structure subagent handles that)\n"
-        "- Do NOT add new steps for missing cascade updates (the structure subagent handles that)\n"
-        "- Do NOT run any `desloppify` commands\n"
-        "- Do NOT debug or repair the CLI / environment\n"
-    )
+    if mode == "self_record":
+        parts.append(
+            "## What NOT to do\n"
+            "- Do NOT reorder steps (the structure subagent handles that)\n"
+            "- Do NOT add --depends-on (the structure subagent handles that)\n"
+            "- Do NOT add new steps for missing cascade updates (the structure subagent handles that)\n"
+            "- Do NOT modify any cluster other than the one assigned in this prompt\n"
+            "- Do NOT run triage stage commands (`plan triage --stage ...`)\n"
+            "- Do NOT debug or repair the CLI / environment\n"
+        )
+    else:
+        parts.append(
+            "## What NOT to do\n"
+            "- Do NOT reorder steps (the structure subagent handles that)\n"
+            "- Do NOT add --depends-on (the structure subagent handles that)\n"
+            "- Do NOT add new steps for missing cascade updates (the structure subagent handles that)\n"
+            "- Do NOT run any `desloppify` commands\n"
+            "- Do NOT debug or repair the CLI / environment\n"
+        )
 
     # Include cluster steps
     parts.append("## Current Steps\n")
@@ -94,10 +127,16 @@ def build_sense_check_content_prompt(
             line += f"\n   {detail[:300]}"
         parts.append(line)
 
-    parts.append(
-        "\n## Output\n"
-        "Write a plain-text report of your findings. The orchestrator records the stage."
-    )
+    if mode == "self_record":
+        parts.append(
+            "\n## Output\n"
+            "Write a plain-text summary of what you verified and what you changed in this cluster."
+        )
+    else:
+        parts.append(
+            "\n## Output\n"
+            "Write a plain-text report of your findings. The orchestrator records the stage."
+        )
 
     return "\n\n".join(parts)
 
@@ -106,6 +145,8 @@ def build_sense_check_structure_prompt(
     *,
     plan: dict,
     repo_root: Path,
+    mode: str = "output_only",
+    cli_command: str = "desloppify",
 ) -> str:
     """Build a structure-verification prompt for cross-cluster dependency checking."""
     clusters = plan.get("clusters", {})
@@ -134,14 +175,31 @@ def build_sense_check_structure_prompt(
         "   instead of adding it.\n"
     )
 
-    parts.append(
-        "## What NOT to do\n"
-        "- Do NOT modify step detail text (the content subagent handles that)\n"
-        "- Do NOT change effort tags (the content subagent handles that)\n"
-        "- Do NOT remove steps or deduplicate (the content subagent handles that)\n"
-        "- Do NOT run any `desloppify` commands\n"
-        "- Do NOT debug or repair the CLI / environment\n"
-    )
+    if mode == "self_record":
+        parts.append(
+            "## How to apply structure fixes\n"
+            f"Use the exact CLI prefix: `{cli_command}`\n"
+            "Apply only structure-level mutations:\n"
+            f"- Add dependency edges: `{cli_command} plan cluster update <name> --depends-on <other-cluster>`\n"
+            f"- Add missing cascade steps: `{cli_command} plan cluster update <name> --add-step \"...\" --detail \"...\" --effort <trivial|small|medium|large> --issue-refs <id...>`\n"
+        )
+        parts.append(
+            "## What NOT to do\n"
+            "- Do NOT modify existing step detail text (content subagents handled that)\n"
+            "- Do NOT change effort tags on existing steps\n"
+            "- Do NOT remove existing steps\n"
+            "- Do NOT run triage stage commands (`plan triage --stage ...`)\n"
+            "- Do NOT debug or repair the CLI / environment\n"
+        )
+    else:
+        parts.append(
+            "## What NOT to do\n"
+            "- Do NOT modify step detail text (the content subagent handles that)\n"
+            "- Do NOT change effort tags (the content subagent handles that)\n"
+            "- Do NOT remove steps or deduplicate (the content subagent handles that)\n"
+            "- Do NOT run any `desloppify` commands\n"
+            "- Do NOT debug or repair the CLI / environment\n"
+        )
 
     # Include all clusters with their steps and dependencies
     parts.append("## Clusters\n")
@@ -163,10 +221,16 @@ def build_sense_check_structure_prompt(
                 line += f"\n     {detail[:200]}"
             parts.append(line)
 
-    parts.append(
-        "\n## Output\n"
-        "Write a plain-text report of your findings. The orchestrator records the stage."
-    )
+    if mode == "self_record":
+        parts.append(
+            "\n## Output\n"
+            "Write a plain-text summary of dependency/cascade fixes you applied."
+        )
+    else:
+        parts.append(
+            "\n## Output\n"
+            "Write a plain-text report of your findings. The orchestrator records the stage."
+        )
 
     return "\n\n".join(parts)
 

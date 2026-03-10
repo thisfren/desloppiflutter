@@ -39,6 +39,9 @@ def run_sense_check(
     logs_dir: Path,
     timeout_seconds: int,
     dry_run: bool = False,
+    cli_command: str = "desloppify",
+    apply_updates: bool = False,
+    reload_plan: Callable[[], dict] | None = None,
     append_run_log=None,
 ) -> TriageStageRunResult:
     """Run sense-check via parallel codex subprocess batches."""
@@ -47,19 +50,34 @@ def run_sense_check(
     clusters = manual_clusters_with_issues(plan)
     total_content = len(clusters)
     total = total_content + 1
-    print(colorize(f"\n  Sense-check: {total_content} content batches + 1 structure batch.", "bold"))
-    _log(f"sense-check-parallel content_batches={total_content}")
+    if apply_updates:
+        print(
+            colorize(
+                f"\n  Sense-check: {total_content} content batches, then 1 structure batch.",
+                "bold",
+            )
+        )
+        _log(f"sense-check-sequenced content_batches={total_content} apply_updates=1")
+    else:
+        print(colorize(f"\n  Sense-check: {total_content} content batches + 1 structure batch.", "bold"))
+        _log(f"sense-check-parallel content_batches={total_content}")
 
     policy = load_policy()
     policy_text = render_policy_block(policy)
 
-    tasks: dict[int, Callable[[], TriageStageRunResult]] = {}
+    content_tasks: dict[int, Callable[[], TriageStageRunResult]] = {}
     batch_meta: list[tuple[str, Path]] = []
+    content_mode = "self_record" if apply_updates else "output_only"
+    structure_mode = "self_record" if apply_updates else "output_only"
 
     for i, cluster_name in enumerate(clusters):
         prompt = build_sense_check_content_prompt(
-            cluster_name=cluster_name, plan=plan, repo_root=repo_root,
+            cluster_name=cluster_name,
+            plan=plan,
+            repo_root=repo_root,
             policy_block=policy_text,
+            mode=content_mode,
+            cli_command=cli_command,
         )
         prompt_file = prompts_dir / f"sense_check_content_{i}.md"
         safe_write_text(prompt_file, prompt)
@@ -69,7 +87,7 @@ def run_sense_check(
         batch_meta.append((f"content:{cluster_name}", output_file))
 
         if not dry_run:
-            tasks[i] = partial(
+            content_tasks[i] = partial(
                 run_triage_stage,
                 prompt=prompt,
                 repo_root=repo_root,
@@ -81,17 +99,70 @@ def run_sense_check(
         print(colorize(f"    Content batch {i + 1}: {cluster_name}", "dim"))
         _log(f"sense-check-content batch={i + 1} cluster={cluster_name}")
 
-    structure_idx = total_content
-    structure_prompt = build_sense_check_structure_prompt(plan=plan, repo_root=repo_root)
+    structure_plan = dict(plan)
+    structure_prompt = build_sense_check_structure_prompt(
+        plan=structure_plan,
+        repo_root=repo_root,
+        mode=structure_mode,
+        cli_command=cli_command,
+    )
     prompt_file = prompts_dir / "sense_check_structure.md"
     safe_write_text(prompt_file, structure_prompt)
 
     structure_output = output_dir / "sense_check_structure.raw.txt"
     structure_log = logs_dir / "sense_check_structure.log"
     batch_meta.append(("structure", structure_output))
+    print(colorize("    Structure batch: global dependency check", "dim"))
+    _log("sense-check-structure batch=global")
 
-    if not dry_run:
-        tasks[structure_idx] = partial(
+    if dry_run:
+        if apply_updates:
+            print(colorize("  [dry-run] Would execute sequenced sense-check batches.", "dim"))
+        else:
+            print(colorize("  [dry-run] Would execute parallel sense-check batches.", "dim"))
+        return TriageStageRunResult(exit_code=0, reason="dry_run", dry_run=True)
+
+    if content_tasks:
+        def _content_label(idx: int) -> str:
+            if idx < len(clusters):
+                return f"content:{clusters[idx]}"
+            return f"content:{idx}"
+
+        content_failures = run_parallel_batches(
+            tasks=content_tasks,
+            stage_label="Sense-check",
+            batch_label_fn=_content_label,
+            append_run_log=_log,
+            heartbeat_seconds=15.0,
+        )
+
+        if content_failures:
+            print(colorize(f"  Sense-check: {len(content_failures)} batch(es) failed: {content_failures}", "red"))
+            _log(f"sense-check-parallel-failed failures={content_failures}")
+            return TriageStageRunResult(
+                exit_code=1,
+                reason="parallel_execution_failed",
+            )
+
+    if apply_updates and reload_plan is not None:
+        try:
+            structure_plan = dict(reload_plan())
+            _log("sense-check-plan-reloaded phase=structure")
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            print(colorize("  Sense-check: failed to reload plan after content updates.", "red"))
+            _log(f"sense-check-plan-reload-failed error={exc}")
+            return TriageStageRunResult(exit_code=1, reason="plan_reload_failed")
+
+        structure_prompt = build_sense_check_structure_prompt(
+            plan=structure_plan,
+            repo_root=repo_root,
+            mode=structure_mode,
+            cli_command=cli_command,
+        )
+        safe_write_text(prompt_file, structure_prompt)
+
+    structure_tasks: dict[int, Callable[[], TriageStageRunResult]] = {
+        0: partial(
             run_triage_stage,
             prompt=structure_prompt,
             repo_root=repo_root,
@@ -100,29 +171,17 @@ def run_sense_check(
             timeout_seconds=timeout_seconds,
             validate_output_fn=_output_file_has_text,
         )
-    print(colorize("    Structure batch: global dependency check", "dim"))
-    _log("sense-check-structure batch=global")
-
-    if dry_run:
-        print(colorize("  [dry-run] Would execute parallel sense-check batches.", "dim"))
-        return TriageStageRunResult(exit_code=0, reason="dry_run", dry_run=True)
-
-    def _batch_label(idx: int) -> str:
-        if idx < len(batch_meta):
-            return batch_meta[idx][0]
-        return f"batch-{idx}"
-
-    failures = run_parallel_batches(
-        tasks=tasks,
+    }
+    structure_failures = run_parallel_batches(
+        tasks=structure_tasks,
         stage_label="Sense-check",
-        batch_label_fn=_batch_label,
+        batch_label_fn=lambda _idx: "structure",
         append_run_log=_log,
         heartbeat_seconds=15.0,
     )
-
-    if failures:
-        print(colorize(f"  Sense-check: {len(failures)} batch(es) failed: {failures}", "red"))
-        _log(f"sense-check-parallel-failed failures={failures}")
+    if structure_failures:
+        print(colorize(f"  Sense-check: {len(structure_failures)} batch(es) failed: {structure_failures}", "red"))
+        _log(f"sense-check-parallel-failed failures={structure_failures}")
         return TriageStageRunResult(
             exit_code=1,
             reason="parallel_execution_failed",

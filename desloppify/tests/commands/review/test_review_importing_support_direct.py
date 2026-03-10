@@ -87,6 +87,59 @@ def test_sync_plan_after_import_handles_plan_exceptions(monkeypatch, capsys) -> 
     assert "skipped plan sync after review import" in out
 
 
+def test_sync_plan_after_import_runs_review_sync_for_auto_resolved_deltas(monkeypatch) -> None:
+    plan: dict = {"queue_order": []}
+    seen = {"import_called": False, "stale_called": False}
+
+    monkeypatch.setattr(plan_queue_mod, "has_living_plan", lambda: True)
+    monkeypatch.setattr(plan_queue_mod, "load_plan", lambda: plan)
+    monkeypatch.setattr(plan_queue_mod, "save_plan", lambda _plan: None)
+    monkeypatch.setattr(plan_queue_mod, "current_unscored_ids", lambda _state: set())
+    monkeypatch.setattr(plan_queue_mod, "purge_ids", lambda _plan, _ids: None)
+    monkeypatch.setattr(
+        plan_queue_mod,
+        "compute_subjective_visibility",
+        lambda *_a, **_k: SimpleNamespace(has_objective_backlog=False),
+    )
+    monkeypatch.setattr(plan_queue_mod, "ScoreSnapshot", lambda **kwargs: SimpleNamespace(**kwargs))
+    monkeypatch.setattr(
+        plan_queue_mod,
+        "sync_communicate_score_needed",
+        lambda _plan, _state, **_kwargs: SimpleNamespace(changes=False),
+    )
+    monkeypatch.setattr(
+        plan_queue_mod,
+        "sync_import_scores_needed",
+        lambda _plan, _state, assessment_mode: SimpleNamespace(changes=False),
+    )
+    monkeypatch.setattr(
+        plan_queue_mod,
+        "sync_create_plan_needed",
+        lambda _plan, _state, policy=None: SimpleNamespace(changes=False),
+    )
+
+    def fake_import_sync(_plan, _state, policy=None):
+        seen["import_called"] = True
+        return None
+
+    def fake_stale_sync(_plan, _state, policy=None):
+        seen["stale_called"] = True
+        return SimpleNamespace(changes=False, injected=[], pruned=[])
+
+    monkeypatch.setattr(plan_queue_mod, "sync_plan_after_review_import", fake_import_sync)
+    monkeypatch.setattr(plan_queue_mod, "sync_stale_dimensions", fake_stale_sync)
+    monkeypatch.setattr(plan_queue_mod, "append_log_entry", lambda *_a, **_k: None)
+
+    plan_sync_mod.sync_plan_after_import(
+        state={},
+        diff={"new": 0, "reopened": 0, "auto_resolved": 2},
+        assessment_mode="issues_only",
+    )
+
+    assert seen["import_called"] is True
+    assert seen["stale_called"] is True
+
+
 def test_sync_plan_after_import_logs_triage_provenance(monkeypatch) -> None:
     plan: dict = {"queue_order": []}
     entries: list[tuple[str, dict]] = []
@@ -112,6 +165,7 @@ def test_sync_plan_after_import_logs_triage_provenance(monkeypatch) -> None:
             new_ids={"review::x"},
             added_to_queue=["review::x"],
             triage_injected=True,
+            stale_pruned_from_queue=[],
             triage_injected_ids=["triage::observe", "triage::reflect"],
             triage_deferred=False,
         ),
@@ -155,6 +209,7 @@ def test_sync_plan_after_import_logs_triage_provenance(monkeypatch) -> None:
     assert detail["triage_injected"] is True
     assert detail["triage_injected_ids"] == ["triage::observe", "triage::reflect"]
     assert detail["triage_deferred"] is False
+    assert detail["stale_pruned_from_queue"] == []
 
 
 def test_sync_plan_after_import_keeps_workflow_before_triage(monkeypatch) -> None:
@@ -200,6 +255,7 @@ def test_sync_plan_after_import_keeps_workflow_before_triage(monkeypatch) -> Non
             new_ids={"review::x"},
             added_to_queue=["review::x"],
             triage_injected=True,
+            stale_pruned_from_queue=[],
             triage_injected_ids=["triage::observe"],
             triage_deferred=False,
         )
@@ -353,6 +409,7 @@ def test_sync_plan_after_import_does_not_purge_subjective_ids(monkeypatch) -> No
             new_ids={"review::new"},
             added_to_queue=["review::new"],
             triage_injected=False,
+            stale_pruned_from_queue=[],
             triage_injected_ids=[],
             triage_deferred=False,
         ),

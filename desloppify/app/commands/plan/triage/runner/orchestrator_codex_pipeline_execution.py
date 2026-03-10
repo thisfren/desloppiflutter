@@ -119,6 +119,9 @@ DEFAULT_STAGE_HANDLERS: dict[str, StageHandler] = {
             logs_dir=context.logs_dir,
             timeout_seconds=context.timeout_seconds,
             dry_run=context.dry_run,
+            cli_command=context.cli_command,
+            apply_updates=True,
+            reload_plan=context.services.load_plan,
             append_run_log=context.append_run_log,
         ),
         record_report=_record_sense_check_report,
@@ -173,6 +176,19 @@ def preflight_stage(
     ],
 ) -> tuple[bool, str | None]:
     """Fail fast when a requested stage has invalid upstream prerequisites."""
+    if stage == "sense-check":
+        enrich_confirmed_at = (
+            plan.get("epic_triage_meta", {})
+            .get("triage_stages", {})
+            .get("enrich", {})
+            .get("confirmed_at")
+        )
+        if enrich_confirmed_at:
+            return True, None
+        reason = "enrich_not_confirmed"
+        append_run_log(f"stage-preflight-failed stage={stage} reason={reason}")
+        return False, reason
+
     if stage != "organize":
         return True, None
     reflect_report = str(

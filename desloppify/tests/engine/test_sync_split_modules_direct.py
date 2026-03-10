@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 import desloppify.engine._plan.auto_cluster_sync_issue as auto_cluster_sync_mod
 import desloppify.engine._plan.constants as plan_constants_mod
-import desloppify.engine._plan.triage.dismiss as triage_dismiss_mod
 import desloppify.engine._plan.reconcile_review_import as reconcile_import_mod
 import desloppify.engine._plan.schema.helpers as schema_helpers_mod
 import desloppify.engine._plan.sync.auto_prune as sync_auto_prune_mod
 import desloppify.engine._plan.sync.context as sync_context_mod
 import desloppify.engine._plan.sync.triage_start_policy as triage_start_policy_mod
 import desloppify.engine._plan.sync.workflow as sync_workflow_mod
+import desloppify.engine._plan.triage.dismiss as triage_dismiss_mod
 import desloppify.engine._plan.triage.playbook as triage_playbook_mod
 import desloppify.engine._scoring.state_integration_subjective as scoring_subjective_mod
 import desloppify.engine._work_queue.lifecycle as lifecycle_mod
@@ -126,6 +126,7 @@ def test_reconcile_review_import_sync_result(monkeypatch) -> None:
     assert result is not None
     assert result.new_ids == {"id2", "id3"}
     assert result.added_to_queue == ["id2", "id3"]
+    assert result.stale_pruned_from_queue == []
     assert result.triage_injected is True
     assert result.triage_injected_ids == ["triage::observe", "triage::reflect"]
     assert result.triage_deferred is False
@@ -151,9 +152,48 @@ def test_reconcile_review_import_sync_uses_open_ids_without_triage_baseline(monk
     assert result is not None
     assert result.new_ids == {"rid::a"}
     assert result.added_to_queue == ["rid::a"]
+    assert result.stale_pruned_from_queue == []
     assert result.triage_injected is True
     assert result.triage_injected_ids == ["triage::observe"]
     assert plan["queue_order"] == ["rid::a"]
+
+
+def test_reconcile_review_import_prunes_stale_review_ids_even_without_new_ids(
+    monkeypatch,
+) -> None:
+    plan = {
+        "queue_order": ["review::live", "review::stale", "smells::keep"],
+        "deferred": ["review::stale", "smells::keep"],
+        "promoted_ids": ["review::stale", "smells::keep"],
+        "clusters": {
+            "manual/review": {"issue_ids": ["review::live", "review::stale"]},
+            "manual/objective": {"issue_ids": ["smells::keep"]},
+        },
+        "epic_triage_meta": {"triaged_ids": ["review::live"]},
+    }
+    state = {"issues": {}}
+
+    monkeypatch.setattr(reconcile_import_mod, "compute_open_issue_ids", lambda _s: {"review::live"})
+    monkeypatch.setattr(reconcile_import_mod, "compute_new_issue_ids", lambda _p, _s: set())
+    monkeypatch.setattr(
+        reconcile_import_mod,
+        "sync_triage_needed",
+        lambda _p, _s, policy=None: SimpleNamespace(injected=[], deferred=False),
+    )
+
+    result = reconcile_import_mod.sync_plan_after_review_import(plan, state, policy=None)
+
+    assert result is not None
+    assert result.new_ids == set()
+    assert result.added_to_queue == []
+    assert result.stale_pruned_from_queue == ["review::stale"]
+    assert plan["queue_order"] == ["review::live", "smells::keep"]
+    assert plan["deferred"] == []
+    assert "review::stale" not in plan["skipped"]
+    assert "smells::keep" in plan["skipped"]
+    assert plan["promoted_ids"] == ["smells::keep"]
+    assert plan["clusters"]["manual/review"]["issue_ids"] == ["review::live"]
+    assert plan["clusters"]["manual/objective"]["issue_ids"] == ["smells::keep"]
 
 
 def test_schema_migration_helpers_cover_legacy_cleanup() -> None:

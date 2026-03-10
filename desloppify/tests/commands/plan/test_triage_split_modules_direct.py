@@ -9,20 +9,21 @@ from types import SimpleNamespace
 
 import pytest
 
-import desloppify.app.commands.plan.triage.validation.completion_policy as completion_policy_mod
-import desloppify.app.commands.plan.triage.validation.completion_stages as completion_stages_mod
-import desloppify.app.commands.plan.triage.validation.enrich_checks as enrich_checks_mod
-import desloppify.app.commands.plan.triage.validation.core as stage_validation_mod
 import desloppify.app.commands.plan.triage.confirmations.basic as confirmations_basic_mod
 import desloppify.app.commands.plan.triage.confirmations.enrich as confirmations_enrich_mod
 import desloppify.app.commands.plan.triage.confirmations.organize as confirmations_organize_mod
 import desloppify.app.commands.plan.triage.display.layout as display_layout_mod
-import desloppify.app.commands.plan.triage.runner.orchestrator_claude as orchestrator_claude_mod
 import desloppify.app.commands.plan.triage.runner.codex_runner as codex_runner_mod
+import desloppify.app.commands.plan.triage.runner.orchestrator_claude as orchestrator_claude_mod
 import desloppify.app.commands.plan.triage.runner.orchestrator_codex_observe as orchestrator_observe_mod
 import desloppify.app.commands.plan.triage.runner.orchestrator_codex_pipeline as orchestrator_pipeline_mod
+import desloppify.app.commands.plan.triage.runner.orchestrator_codex_pipeline_execution as orchestrator_pipeline_execution_mod
 import desloppify.app.commands.plan.triage.runner.orchestrator_codex_sense as orchestrator_sense_mod
 import desloppify.app.commands.plan.triage.runner.orchestrator_common as orchestrator_common_mod
+import desloppify.app.commands.plan.triage.validation.completion_policy as completion_policy_mod
+import desloppify.app.commands.plan.triage.validation.completion_stages as completion_stages_mod
+import desloppify.app.commands.plan.triage.validation.core as stage_validation_mod
+import desloppify.app.commands.plan.triage.validation.enrich_checks as enrich_checks_mod
 from desloppify.base.exception_sets import CommandError
 
 
@@ -548,6 +549,155 @@ def test_orchestrator_sense_non_dry_run_reports_parallel_failures(monkeypatch, t
     assert "batch(es) failed" in out
 
 
+def test_orchestrator_sense_apply_updates_sequences_and_reloads_plan(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(orchestrator_sense_mod, "manual_clusters_with_issues", lambda _plan: ["cluster-a"])
+
+    content_modes: list[str] = []
+    structure_modes: list[str] = []
+    structure_versions: list[str] = []
+    reload_calls = {"count": 0}
+    phase_order: list[str] = []
+
+    def fake_content_prompt(
+        *,
+        cluster_name,
+        plan,
+        repo_root,
+        policy_block,
+        mode,
+        cli_command,
+    ):
+        del cluster_name, plan, repo_root, policy_block, cli_command
+        content_modes.append(mode)
+        return "content prompt"
+
+    def fake_structure_prompt(*, plan, repo_root, mode, cli_command):
+        del repo_root, cli_command
+        structure_modes.append(mode)
+        structure_versions.append(str(plan.get("version", "missing")))
+        return "structure prompt"
+
+    def fake_run_triage_stage(
+        *,
+        prompt,
+        repo_root,
+        output_file,
+        log_file,
+        timeout_seconds,
+        validate_output_fn,
+    ):
+        del repo_root, log_file, timeout_seconds
+        if "content" in prompt:
+            output_file.write_text("content batch output", encoding="utf-8")
+        else:
+            output_file.write_text("structure batch output", encoding="utf-8")
+        assert validate_output_fn(output_file)
+        return codex_runner_mod.TriageStageRunResult(exit_code=0)
+
+    def fake_run_parallel_batches(
+        *,
+        tasks,
+        stage_label,
+        batch_label_fn,
+        append_run_log,
+        heartbeat_seconds,
+    ):
+        del stage_label, append_run_log, heartbeat_seconds
+        labels = [batch_label_fn(i) for i in tasks]
+        if any(label.startswith("content:") for label in labels):
+            phase_order.append("content")
+        if "structure" in labels:
+            phase_order.append("structure")
+        for task in tasks.values():
+            assert task().ok
+        return []
+
+    def fake_reload_plan():
+        reload_calls["count"] += 1
+        return {
+            "version": "after-content",
+            "clusters": {"cluster-a": {"issue_ids": ["id1"], "action_steps": []}},
+        }
+
+    monkeypatch.setattr(
+        orchestrator_sense_mod,
+        "build_sense_check_content_prompt",
+        fake_content_prompt,
+    )
+    monkeypatch.setattr(
+        orchestrator_sense_mod,
+        "build_sense_check_structure_prompt",
+        fake_structure_prompt,
+    )
+    monkeypatch.setattr(orchestrator_sense_mod, "run_triage_stage", fake_run_triage_stage)
+    monkeypatch.setattr(orchestrator_sense_mod, "run_parallel_batches", fake_run_parallel_batches)
+
+    prompts_dir = tmp_path / "prompts"
+    output_dir = tmp_path / "out"
+    logs_dir = tmp_path / "logs"
+    prompts_dir.mkdir()
+    output_dir.mkdir()
+    logs_dir.mkdir()
+
+    result = orchestrator_sense_mod.run_sense_check(
+        plan={
+            "version": "before-content",
+            "clusters": {"cluster-a": {"issue_ids": ["id1"], "action_steps": []}},
+        },
+        repo_root=tmp_path,
+        prompts_dir=prompts_dir,
+        output_dir=output_dir,
+        logs_dir=logs_dir,
+        timeout_seconds=60,
+        dry_run=False,
+        cli_command="/tmp/run_desloppify.sh",
+        apply_updates=True,
+        reload_plan=fake_reload_plan,
+    )
+
+    assert result.ok
+    assert content_modes == ["self_record"]
+    assert structure_modes == ["self_record", "self_record"]
+    assert structure_versions[-1] == "after-content"
+    assert reload_calls["count"] == 1
+    assert phase_order == ["content", "structure"]
+
+
+def test_default_sense_handler_enables_apply_update_mode(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_sense_check(**kwargs):
+        captured.update(kwargs)
+        return codex_runner_mod.TriageStageRunResult(exit_code=0)
+
+    monkeypatch.setattr(
+        orchestrator_pipeline_execution_mod,
+        "run_sense_check",
+        fake_run_sense_check,
+    )
+
+    context = SimpleNamespace(
+        plan={"clusters": {}},
+        repo_root=tmp_path,
+        prompts_dir=tmp_path / "prompts",
+        output_dir=tmp_path / "out",
+        logs_dir=tmp_path / "logs",
+        timeout_seconds=60,
+        dry_run=False,
+        cli_command="/tmp/run_desloppify.sh",
+        append_run_log=lambda _line: None,
+        services=SimpleNamespace(load_plan=lambda: {"clusters": {}}),
+    )
+    handler = orchestrator_pipeline_execution_mod.DEFAULT_STAGE_HANDLERS["sense-check"]
+    assert handler.run_parallel is not None
+
+    result = handler.run_parallel(context)
+    assert result.ok
+    assert captured["cli_command"] == "/tmp/run_desloppify.sh"
+    assert captured["apply_updates"] is True
+    assert callable(captured["reload_plan"])
+
+
 def test_orchestrator_pipeline_summary_writer(tmp_path) -> None:
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True)
@@ -775,6 +925,57 @@ def test_execute_stage_blocks_organize_when_reflect_accounting_is_invalid(
 
     assert status == "failed"
     assert result["error"].startswith("reflect_accounting_invalid")
+
+
+def test_execute_stage_blocks_sense_check_when_enrich_is_not_confirmed(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    for dirname in ("prompts", "output", "logs"):
+        (tmp_path / dirname).mkdir()
+
+    def fail_if_sense_runs(**_kwargs):
+        raise AssertionError("sense-check runner should not launch when enrich is unconfirmed")
+
+    monkeypatch.setattr(
+        orchestrator_pipeline_execution_mod,
+        "run_sense_check",
+        fail_if_sense_runs,
+    )
+
+    log_lines: list[str] = []
+    status, result = orchestrator_pipeline_mod._execute_stage(
+        stage="sense-check",
+        args=argparse.Namespace(state=None),
+        services=SimpleNamespace(load_plan=lambda: {"epic_triage_meta": {"triage_stages": {}}}),
+        plan={
+            "epic_triage_meta": {
+                "triage_stages": {
+                    "enrich": {
+                        "report": "enrich report exists but has not been confirmed yet",
+                    }
+                }
+            }
+        },
+        si=SimpleNamespace(open_issues={}),
+        prior_reports={"enrich": "enrich report exists but has not been confirmed yet"},
+        repo_root=tmp_path,
+        prompts_dir=tmp_path / "prompts",
+        output_dir=tmp_path / "output",
+        logs_dir=tmp_path / "logs",
+        cli_command="/tmp/run_desloppify.sh",
+        stage_start=time.monotonic(),
+        timeout_seconds=60,
+        dry_run=False,
+        append_run_log=log_lines.append,
+    )
+
+    assert status == "failed"
+    assert result["error"] == "enrich_not_confirmed"
+    assert any(
+        line == "stage-preflight-failed stage=sense-check reason=enrich_not_confirmed"
+        for line in log_lines
+    )
 
 
 def test_repair_reflect_report_if_needed_repairs_missing_hashes(monkeypatch, tmp_path: Path) -> None:

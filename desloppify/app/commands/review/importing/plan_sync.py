@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import desloppify.engine.plan_queue as plan_queue_mod
 from desloppify import state as state_mod
 from desloppify.app.commands.helpers.display import short_issue_id
 from desloppify.base.config import target_strict_score_from_config
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
 from desloppify.base.output.terminal import colorize
-import desloppify.engine.plan_queue as plan_queue_mod
 from desloppify.engine.plan_triage import (
     TRIAGE_CMD_RUN_STAGES_CLAUDE,
     TRIAGE_CMD_RUN_STAGES_CODEX,
@@ -22,19 +22,27 @@ def _print_review_import_sync(
 ) -> None:
     """Print summary of plan changes after review import sync."""
     new_ids = result.new_ids
-    print(colorize(
-        f"\n  Plan updated: {len(new_ids)} new review issue(s) added to queue.",
-        "bold",
-    ))
-    issues = state.get("issues", {})
-    for finding_id in sorted(new_ids)[:10]:
-        finding = issues.get(finding_id, {})
-        print(f"    * [{short_issue_id(finding_id)}] {finding.get('summary', '')}")
-    if len(new_ids) > 10:
-        print(colorize(f"    ... and {len(new_ids) - 10} more", "dim"))
+    stale_pruned = result.stale_pruned_from_queue
+    print()
+    if new_ids:
+        print(colorize(
+            f"  Plan updated: {len(new_ids)} new review issue(s) added to queue.",
+            "bold",
+        ))
+        issues = state.get("issues", {})
+        for finding_id in sorted(new_ids)[:10]:
+            finding = issues.get(finding_id, {})
+            print(f"    * [{short_issue_id(finding_id)}] {finding.get('summary', '')}")
+        if len(new_ids) > 10:
+            print(colorize(f"    ... and {len(new_ids) - 10} more", "dim"))
+    if stale_pruned:
+        print(colorize(
+            f"  Plan updated: {len(stale_pruned)} stale review issue(s) removed from queue.",
+            "bold",
+        ))
     print()
     print(colorize(
-        "  Review issues were added to the queue. Workflow follow-up may be front-loaded.",
+        "  Review queue sync completed. Workflow follow-up may be front-loaded.",
         "dim",
     ))
     print()
@@ -94,9 +102,10 @@ def sync_plan_after_import(
             dirty = True
             workflow_injected_ids.append("workflow::communicate-score")
 
-        has_new_issues = (
+        has_review_issue_delta = (
             int(diff.get("new", 0) or 0) > 0
             or int(diff.get("reopened", 0) or 0) > 0
+            or int(diff.get("auto_resolved", 0) or 0) > 0
         )
         import_result = None
         covered_ids: list[str] = []
@@ -126,7 +135,7 @@ def sync_plan_after_import(
             workflow_injected_ids.append("workflow::create-plan")
             injected_parts.append("`workflow::create-plan`")
 
-        if has_new_issues:
+        if has_review_issue_delta:
             import_result = plan_queue_mod.sync_plan_after_review_import(
                 plan,
                 state,
@@ -191,6 +200,10 @@ def sync_plan_after_import(
                         ),
                         "diff_new": diff.get("new", 0),
                         "diff_reopened": diff.get("reopened", 0),
+                        "diff_auto_resolved": diff.get("auto_resolved", 0),
+                        "stale_pruned_from_queue": (
+                            import_result.stale_pruned_from_queue if import_result is not None else []
+                        ),
                         "covered_subjective": covered_ids,
                         "stale_sync_injected": (
                             sorted(stale_sync_result.injected)
