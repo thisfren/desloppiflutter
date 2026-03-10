@@ -141,6 +141,56 @@ def render_score_impact(
         )
 
 
+def _explain_base_text(
+    item: dict,
+    detail: dict,
+    confidence: str,
+) -> str:
+    count_weight = item.get("explain", {}).get("count", int(detail.get("count", 0) or 0))
+    return (
+        f"ranked by confidence={confidence}, "
+        f"count={count_weight}, id={item.get('id', '')}"
+    )
+
+
+def _detector_dimension_explain(
+    detector: str,
+    dim_scores: dict,
+    *,
+    get_dimension_for_detector_fn,
+) -> str:
+    if not dim_scores or not detector:
+        return ""
+    dimension = get_dimension_for_detector_fn(detector)
+    if not dimension or dimension.name not in dim_scores:
+        return ""
+    ds = dim_scores[dimension.name]
+    return (
+        f". Dimension: {dimension.name} at {ds['score']:.1f}% "
+        f"({ds.get('failing', 0)} open issues)"
+    )
+
+
+def _format_score_value(value) -> str:
+    if isinstance(value, int | float):
+        return f"{value:.1f}"
+    return str(value)
+
+
+def _review_dimension_explain(item: dict, dim_scores: dict) -> str:
+    if item.get("detector") != "review" or not dim_scores:
+        return ""
+    dim_key = _normalized_dimension_key(item.get("detail", {}).get("dimension", ""))
+    if not dim_key:
+        return ""
+    for ds_name, ds_data in dim_scores.items():
+        if _normalized_dimension_key(ds_name) != dim_key:
+            continue
+        score_str = _format_score_value(ds_data.get("score", "?"))
+        return f". Subjective dimension: {ds_name} at {score_str}%"
+    return ""
+
+
 def render_item_explain(
     item: dict,
     detail: dict,
@@ -150,31 +200,19 @@ def render_item_explain(
     colorize_fn,
     get_dimension_for_detector_fn,
 ) -> None:
-    explanation = item.get("explain", {})
-    count_weight = explanation.get("count", int(detail.get("count", 0) or 0))
     detector = item.get("detector", "")
-    base = (
-        f"ranked by confidence={confidence}, "
-        f"count={count_weight}, id={item.get('id', '')}"
+    explanation = item.get("explain", {})
+    base = _explain_base_text(
+        item,
+        detail,
+        confidence,
     )
-    if dim_scores and detector:
-        dimension = get_dimension_for_detector_fn(detector)
-        if dimension and dimension.name in dim_scores:
-            ds = dim_scores[dimension.name]
-            base += (
-                f". Dimension: {dimension.name} at {ds['score']:.1f}% "
-                f"({ds.get('failing', 0)} open issues)"
-            )
-    if item.get("detector") == "review" and dim_scores:
-        dim_key = _normalized_dimension_key(item.get("detail", {}).get("dimension", ""))
-        if dim_key:
-            for ds_name, ds_data in dim_scores.items():
-                if _normalized_dimension_key(ds_name) != dim_key:
-                    continue
-                score_val = ds_data.get("score", "?")
-                score_str = f"{score_val:.1f}" if isinstance(score_val, int | float) else str(score_val)
-                base += f". Subjective dimension: {ds_name} at {score_str}%"
-                break
+    base += _detector_dimension_explain(
+        detector,
+        dim_scores,
+        get_dimension_for_detector_fn=get_dimension_for_detector_fn,
+    )
+    base += _review_dimension_explain(item, dim_scores)
     policy = explanation.get("policy")
     if policy:
         base = f"{base}. {policy}"

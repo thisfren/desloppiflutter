@@ -142,6 +142,46 @@ def _step_display_text(step: str | dict) -> str:
     return str(step)
 
 
+def _render_cluster_header(
+    *,
+    type_label: str,
+    member_count: int,
+    step_badge: str,
+    optional_tag: str,
+    summary: str,
+) -> None:
+    print(colorize(f"  ({type_label}, {member_count} issues{step_badge}{optional_tag})", "bold"))
+    print(colorize("  " + "─" * 60, "dim"))
+    print(f"  {colorize(summary, 'yellow')}")
+
+
+def _render_cluster_steps(action_steps: list[dict | str]) -> None:
+    if not action_steps:
+        return
+    show_count = min(3, len(action_steps))
+    for i, step in enumerate(action_steps[:show_count], 1):
+        marker = "[x]" if isinstance(step, dict) and step.get("done") else "[ ]"
+        print(colorize(f"    {i}. {marker} {_step_display_text(step)}", "dim"))
+    remaining = len(action_steps) - show_count
+    if remaining > 0:
+        print(colorize(f"    ... and {remaining} more — drill in to view all", "dim"))
+
+
+def _render_cluster_priority(dep_order: int | None) -> None:
+    if dep_order is not None and dep_order <= 2:
+        print(colorize("  Priority: complete before other clusters", "cyan"))
+
+
+def _render_cluster_primary_action(item: dict) -> None:
+    autofix_hint = item.get("autofix_hint")
+    primary_command = item.get("primary_command")
+    if autofix_hint:
+        print(colorize(f"\n  Try auto first: {autofix_hint}", "cyan"))
+        print(colorize("  If auto finds 0, drill into individual issues:", "dim"))
+    if primary_command:
+        print(colorize(f"  Action: {primary_command}", "cyan"))
+
+
 def render_cluster_item(item: dict) -> None:
     """Render an auto-cluster task card."""
     member_count = int(item.get("member_count", 0))
@@ -153,38 +193,22 @@ def render_cluster_item(item: dict) -> None:
     done_count = sum(1 for s in action_steps if isinstance(s, dict) and s.get("done"))
     step_badge = f" [{done_count}/{len(action_steps)} steps done]" if action_steps else ""
     optional_tag = " — optional" if is_optional else ""
-    print(colorize(f"  ({type_label}, {member_count} issues{step_badge}{optional_tag})", "bold"))
-    print(colorize("  " + "─" * 60, "dim"))
-    print(f"  {colorize(item.get('summary', ''), 'yellow')}")
+    _render_cluster_header(
+        type_label=type_label,
+        member_count=member_count,
+        step_badge=step_badge,
+        optional_tag=optional_tag,
+        summary=item.get("summary", ""),
+    )
+    _render_cluster_steps(action_steps)
+    _render_cluster_priority(item.get("dependency_order"))
 
-    # Action steps
-    if action_steps:
-        show_count = min(3, len(action_steps))
-        for i, step in enumerate(action_steps[:show_count], 1):
-            marker = "[x]" if isinstance(step, dict) and step.get("done") else "[ ]"
-            print(colorize(f"    {i}. {marker} {_step_display_text(step)}", "dim"))
-        remaining = len(action_steps) - show_count
-        if remaining > 0:
-            print(colorize(f"    ... and {remaining} more — drill in to view all", "dim"))
-
-    dep_order = item.get("dependency_order")
-    if dep_order is not None and dep_order <= 2:
-        print(colorize("  Priority: complete before other clusters", "cyan"))
-
-    # Cluster members
     members = item.get("members", [])
     if members:
         _render_cluster_files(members)
         _render_cluster_sample(members)
 
-    # Primary action
-    autofix_hint = item.get("autofix_hint")
-    primary_command = item.get("primary_command")
-    if autofix_hint:
-        print(colorize(f"\n  Try auto first: {autofix_hint}", "cyan"))
-        print(colorize("  If auto finds 0, drill into individual issues:", "dim"))
-    if primary_command:
-        print(colorize(f"  Action: {primary_command}", "cyan"))
+    _render_cluster_primary_action(item)
 
     if is_optional:
         _render_optional_cluster_commands(cluster_name)

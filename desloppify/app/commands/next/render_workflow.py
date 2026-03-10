@@ -14,19 +14,41 @@ def step_text(step: str | dict) -> str:
     return str(step)
 
 
-def _print_runner_commands(detail: dict, *, colorize_fn) -> None:
-    runner_commands = detail.get("runner_commands", []) if isinstance(detail, dict) else []
-    if isinstance(runner_commands, list) and runner_commands:
-        print(colorize_fn("  Runners:", "dim"))
-        for idx, runner_entry in enumerate(runner_commands, 1):
-            if not isinstance(runner_entry, dict):
-                continue
-            label = str(runner_entry.get("label", "")).strip()
-            command = str(runner_entry.get("command", "")).strip()
-            if label and command:
-                print(colorize_fn(f"  {idx}. {label}: {command}", "dim"))
+def _detail_mapping(detail: dict) -> dict:
+    return detail if isinstance(detail, dict) else {}
 
-    manual_fallback = detail.get("manual_fallback", "") if isinstance(detail, dict) else ""
+
+def _print_labeled_commands(
+    title: str,
+    entries,
+    *,
+    colorize_fn,
+) -> None:
+    if not isinstance(entries, list) or not entries:
+        return
+    print(colorize_fn(title, "dim"))
+    for idx, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label", "")).strip()
+        command = str(entry.get("command", "")).strip()
+        if label and command:
+            print(colorize_fn(f"  {idx}. {label}: {command}", "dim"))
+        elif command:
+            print(colorize_fn(f"  {idx}. {command}", "dim"))
+        elif label:
+            print(colorize_fn(f"  {idx}. {label}", "dim"))
+
+
+def _print_runner_commands(detail: dict, *, colorize_fn) -> None:
+    detail = _detail_mapping(detail)
+    _print_labeled_commands(
+        "  Runners:",
+        detail.get("runner_commands", []),
+        colorize_fn=colorize_fn,
+    )
+
+    manual_fallback = detail.get("manual_fallback", "")
     if manual_fallback:
         print(colorize_fn(f"  Manual fallback: {manual_fallback}", "dim"))
 
@@ -78,36 +100,17 @@ def render_workflow_action(item: dict, *, colorize_fn) -> None:
     print(colorize_fn("  (Workflow step)", "bold"))
     print(colorize_fn("  " + "─" * 60, "dim"))
     print(f"  {colorize_fn(item.get('summary', ''), 'yellow')}")
-    detail = item.get("detail", {})
-    planning_tools = detail.get("planning_tools", []) if isinstance(detail, dict) else []
-    if isinstance(planning_tools, list) and planning_tools:
-        print(colorize_fn("\n  Planning tools:", "dim"))
-        for idx, tool in enumerate(planning_tools, 1):
-            if not isinstance(tool, dict):
-                continue
-            label = str(tool.get("label", "")).strip()
-            command = str(tool.get("command", "")).strip()
-            if label and command:
-                print(colorize_fn(f"  {idx}. {label}: {command}", "dim"))
-            elif command:
-                print(colorize_fn(f"  {idx}. {command}", "dim"))
-            elif label:
-                print(colorize_fn(f"  {idx}. {label}", "dim"))
-
-    options = detail.get("decision_options", []) if isinstance(detail, dict) else []
-    if isinstance(options, list) and options:
-        print(colorize_fn("\n  Decision options:", "dim"))
-        for idx, option in enumerate(options, 1):
-            if not isinstance(option, dict):
-                continue
-            label = str(option.get("label", "")).strip()
-            command = str(option.get("command", "")).strip()
-            if label and command:
-                print(colorize_fn(f"  {idx}. {label}: {command}", "dim"))
-            elif command:
-                print(colorize_fn(f"  {idx}. {command}", "dim"))
-            elif label:
-                print(colorize_fn(f"  {idx}. {label}", "dim"))
+    detail = _detail_mapping(item.get("detail", {}))
+    _print_labeled_commands(
+        "\n  Planning tools:",
+        detail.get("planning_tools", []),
+        colorize_fn=colorize_fn,
+    )
+    _print_labeled_commands(
+        "\n  Decision options:",
+        detail.get("decision_options", []),
+        colorize_fn=colorize_fn,
+    )
     print(colorize_fn(f"\n  Action: {item.get('primary_command', '')}", "cyan"))
 
 
