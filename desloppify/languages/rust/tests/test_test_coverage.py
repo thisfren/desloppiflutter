@@ -77,6 +77,32 @@ def test_resolve_import_spec_uses_local_crate_name(tmp_path):
     assert resolved == str(source.resolve())
 
 
+def test_resolve_import_spec_uses_custom_lib_name(tmp_path):
+    _write(
+        tmp_path,
+        "Cargo.toml",
+        """
+[package]
+name = "demo-app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "demo_core"
+""",
+    )
+    _write(tmp_path, "src/lib.rs", "pub mod service;\n")
+    source = _write(tmp_path, "src/service.rs", "pub struct Service;\n")
+    test_file = _write(tmp_path, "tests/service.rs", "use demo_core::service::Service;\n")
+
+    resolved = rust_cov.resolve_import_spec(
+        "demo_core::service::Service",
+        str(test_file.resolve()),
+        {str(source.resolve())},
+    )
+    assert resolved == str(source.resolve())
+
+
 def test_resolve_import_spec_uses_workspace_local_crates(tmp_path):
     _write(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["app", "support"]\n')
     _write(
@@ -99,6 +125,42 @@ def test_resolve_import_spec_uses_workspace_local_crates(tmp_path):
 
     resolved = rust_cov.resolve_import_spec(
         "support_utils::helpers::Thing",
+        str(test_file.resolve()),
+        {str(source.resolve())},
+    )
+    assert resolved == str(source.resolve())
+
+
+def test_resolve_import_spec_uses_workspace_dependency_alias(tmp_path):
+    _write(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["app", "support"]\n')
+    _write(
+        tmp_path,
+        "app/Cargo.toml",
+        """
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+support = { package = "support-utils", path = "../support" }
+""",
+    )
+    _write(
+        tmp_path,
+        "support/Cargo.toml",
+        '[package]\nname = "support-utils"\nversion = "0.1.0"\nedition = "2021"\n',
+    )
+    source = _write(tmp_path, "support/src/helpers.rs", "pub struct Thing;\n")
+    _write(tmp_path, "support/src/lib.rs", "pub mod helpers;\n")
+    test_file = _write(
+        tmp_path,
+        "app/tests/helpers.rs",
+        "use support::helpers::Thing;\n",
+    )
+
+    resolved = rust_cov.resolve_import_spec(
+        "support::helpers::Thing",
         str(test_file.resolve()),
         {str(source.resolve())},
     )

@@ -18,6 +18,7 @@ def test_config_detect_commands_populated():
         "dupes",
         "large",
         "complexity",
+        "smells",
         "clippy_warning",
         "cargo_error",
         "rustdoc_warning",
@@ -28,6 +29,9 @@ def test_config_detect_commands_populated():
         "rust_error_boundary",
         "rust_future_proofing",
         "rust_thread_safety",
+        "rust_async_locking",
+        "rust_drop_safety",
+        "rust_unsafe_api",
     ):
         assert name in cfg.detect_commands
 
@@ -42,6 +46,7 @@ def test_config_has_core_phases():
     assert "cargo check" in labels
     assert "cargo rustdoc" in labels
     assert "Test coverage" in labels
+    assert "Code smells" in labels
     assert "Security" in labels
 
 

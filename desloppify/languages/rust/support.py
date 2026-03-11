@@ -6,19 +6,18 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from desloppify.base.discovery.file_paths import rel, resolve_path
 from desloppify.base.discovery.paths import get_project_root
 from desloppify.base.discovery.source import find_source_files
-from desloppify.base.text_utils import strip_c_style_comments
-
 RUST_FILE_EXCLUSIONS = ["target", ".git", "node_modules", "vendor"]
-_USE_RE = re.compile(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+([^;]+);")
-_PUB_USE_RE = re.compile(r"(?m)^\s*pub(?:\([^)]*\))?\s+use\s+([^;]+);")
-_MOD_RE = re.compile(r"(?m)^\s*(?:pub\s+)?mod\s+([A-Za-z_]\w*)\s*;")
-_PUBLIC_ITEM_RE = re.compile(
-    r"(?m)^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|trait|type|fn|mod)\s+"
-)
+USE_STATEMENT_RE = re.compile(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+([^;]+);")
+PUB_USE_STATEMENT_RE = re.compile(r"(?m)^\s*pub(?:\([^)]*\))?\s+use\s+([^;]+);")
+_MOD_LINE_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_]\w*)\s*;")
+_ATTR_RE = re.compile(r"#\[[^\]]+\]")
+_PATH_ATTR_RE = re.compile(r'#\s*\[\s*path\s*=\s*"([^"\n]+)"\s*\]')
+_PUBLIC_ITEM_RE = re.compile(r"(?m)^\s*pub\s+(?:struct|enum|trait|type|fn|mod)\s+")
 _RUST_LOG_RE = re.compile(r"^\s*(?:println!|eprintln!|dbg!|tracing::)", re.MULTILINE)
 
 
@@ -50,12 +49,77 @@ def find_rust_files(path: Path | str) -> list[str]:
     return find_source_files(path, [".rs"], exclusions=RUST_FILE_EXCLUSIONS)
 
 
-def strip_rust_comments(content: str) -> str:
+def read_text_or_none(path: Path | str, *, errors: str = "replace") -> str | None:
+    """Read a file as text, returning ``None`` when the file is unavailable."""
+    try:
+        return Path(resolve_path(str(path))).read_text(errors=errors)
+    except OSError:
+        return None
+
+
+def strip_rust_comments(content: str, *, preserve_lines: bool = False) -> str:
     """Strip Rust line/block comments while preserving literals best-effort."""
-    stripped = strip_c_style_comments(content)
-    stripped = re.sub(r"(?m)^\s*///.*$", "", stripped)
-    stripped = re.sub(r"(?m)^\s*//!\s?.*$", "", stripped)
-    return stripped
+    return _strip_rust_comments_impl(content, preserve_lines=preserve_lines)
+
+
+def _strip_rust_comments_impl(text: str, *, preserve_lines: bool) -> str:
+    """Strip Rust comments without treating Markdown backticks as string delimiters."""
+    result: list[str] = []
+    i = 0
+    in_str: str | None = None
+    while i < len(text):
+        ch = text[i]
+        if in_str:
+            if ch == "\\" and i + 1 < len(text):
+                result.append(text[i : i + 2])
+                i += 2
+                continue
+            if ch == in_str:
+                in_str = None
+            result.append(ch)
+            i += 1
+            continue
+
+        if ch == '"':
+            in_str = ch
+            result.append(ch)
+            i += 1
+            continue
+
+        if ch == "/" and i + 1 < len(text):
+            next_char = text[i + 1]
+            if next_char == "/":
+                if preserve_lines:
+                    while i < len(text) and text[i] != "\n":
+                        result.append(" ")
+                        i += 1
+                else:
+                    while i < len(text) and text[i] != "\n":
+                        i += 1
+                continue
+            if next_char == "*":
+                if preserve_lines:
+                    result.extend((" ", " "))
+                i += 2
+                while i < len(text):
+                    if text[i] == "*" and i + 1 < len(text) and text[i + 1] == "/":
+                        if preserve_lines:
+                            result.extend((" ", " "))
+                        i += 2
+                        break
+                    if preserve_lines:
+                        result.append("\n" if text[i] == "\n" else " ")
+                    i += 1
+                continue
+
+        result.append(ch)
+        i += 1
+    return "".join(result)
+
+
+def _strip_c_style_comments_preserve_lines(text: str) -> str:
+    """Strip C-style comments while preserving newlines for line-number accuracy."""
+    return _strip_rust_comments_impl(text, preserve_lines=True)
 
 
 def normalize_rust_body(body: str) -> str:
@@ -79,15 +143,43 @@ def has_public_api_markers(content: str) -> bool:
 
 def iter_mod_declarations(content: str) -> list[str]:
     """Return `mod foo;` declarations from a file."""
+    return [name for name, _ in iter_mod_targets(content)]
+
+
+def iter_mod_targets(content: str) -> list[tuple[str, str | None]]:
+    """Return `mod foo;` declarations plus optional `#[path = ...]` overrides."""
     stripped = strip_rust_comments(content)
-    return [match.group(1) for match in _MOD_RE.finditer(stripped)]
+    declarations: list[tuple[str, str | None]] = []
+    attrs: list[str] = []
+    for raw_line in stripped.splitlines():
+        line = raw_line.strip()
+        if not line:
+            attrs = []
+            continue
+
+        if line.startswith("#["):
+            inline_attrs = _ATTR_RE.findall(line)
+            if inline_attrs:
+                attrs.extend(inline_attrs)
+                line = _ATTR_RE.sub("", line).strip()
+                if not line:
+                    continue
+            else:
+                attrs = []
+                continue
+
+        match = _MOD_LINE_RE.match(line)
+        if match:
+            declarations.append((match.group(1), _path_override_from_attrs(attrs)))
+        attrs = []
+    return declarations
 
 
 def iter_use_specs(content: str) -> list[str]:
     """Return normalized Rust `use` / `pub use` specs from a file."""
     stripped = strip_rust_comments(content)
     specs: list[str] = []
-    for match in _USE_RE.finditer(stripped):
+    for match in USE_STATEMENT_RE.finditer(stripped):
         specs.extend(_expand_use_tree(match.group(1)))
     return specs
 
@@ -96,7 +188,7 @@ def iter_pub_use_specs(content: str) -> list[str]:
     """Return normalized `pub use` specs from a file."""
     stripped = strip_rust_comments(content)
     specs: list[str] = []
-    for match in _PUB_USE_RE.finditer(stripped):
+    for match in PUB_USE_STATEMENT_RE.finditer(stripped):
         specs.extend(_expand_use_tree(match.group(1)))
     return specs
 
@@ -114,17 +206,31 @@ def find_manifest_dir(path: Path | str) -> Path | None:
 
 def read_package_name(manifest_dir: Path) -> str | None:
     """Read package name from Cargo.toml, if present."""
-    manifest = manifest_dir / "Cargo.toml"
-    if not manifest.is_file():
-        return None
-    try:
-        data = tomllib.loads(manifest.read_text())
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
+    data = _read_manifest_data(manifest_dir)
     package = data.get("package")
     if not isinstance(package, dict):
         return None
     return normalize_crate_name(package.get("name"))
+
+
+def read_library_crate_name(manifest_dir: Path) -> str | None:
+    """Read the library crate name, falling back to the package name."""
+    data = _read_manifest_data(manifest_dir)
+    lib = data.get("lib")
+    if isinstance(lib, dict):
+        name = normalize_crate_name(lib.get("name"))
+        if name:
+            return name
+    package = data.get("package")
+    if not isinstance(package, dict):
+        return None
+    return normalize_crate_name(package.get("name"))
+
+
+def _read_manifest_data(manifest_dir: Path) -> dict[str, Any]:
+    """Parse a Cargo manifest into a dictionary."""
+    data = _load_toml_dict(manifest_dir / "Cargo.toml")
+    return data or {}
 
 
 def build_workspace_package_index(scan_root: Path | None = None) -> dict[str, Path]:
@@ -134,10 +240,114 @@ def build_workspace_package_index(scan_root: Path | None = None) -> dict[str, Pa
     for manifest in root.rglob("Cargo.toml"):
         if any(part in RUST_FILE_EXCLUSIONS for part in manifest.parts):
             continue
-        name = read_package_name(manifest.parent)
-        if name:
-            packages[name] = manifest.parent.resolve()
+        manifest_dir = manifest.parent.resolve()
+        for name in {
+            read_package_name(manifest_dir),
+            read_library_crate_name(manifest_dir),
+        }:
+            if name:
+                packages[name] = manifest_dir
     return packages
+
+
+def build_local_dependency_alias_index(
+    manifest_dir: Path,
+    package_index: dict[str, Path] | None = None,
+) -> dict[str, Path]:
+    """Map local dependency aliases usable from one manifest to their crate roots."""
+    normalized_manifest_dir = manifest_dir.resolve()
+    workspace_root = find_workspace_root(normalized_manifest_dir)
+    package_index = package_index or build_workspace_package_index(workspace_root)
+    workspace_aliases = _workspace_dependency_alias_index(workspace_root, package_index)
+    aliases: dict[str, Path] = {}
+    data = _read_manifest_data(normalized_manifest_dir)
+    for alias, dependency in _iter_dependency_entries(data):
+        alias_name = normalize_crate_name(alias)
+        if not alias_name or not isinstance(dependency, dict):
+            continue
+        resolved = _resolve_local_dependency_entry(
+            alias_name=alias_name,
+            dependency=dependency,
+            base_dir=normalized_manifest_dir,
+            package_index=package_index,
+            workspace_aliases=workspace_aliases,
+        )
+        if resolved is not None:
+            aliases[alias_name] = resolved
+    return aliases
+
+
+def _workspace_dependency_alias_index(
+    workspace_root: Path,
+    package_index: dict[str, Path],
+) -> dict[str, Path]:
+    data = _read_manifest_data(workspace_root)
+    workspace = data.get("workspace")
+    if not isinstance(workspace, dict):
+        return {}
+    dependencies = workspace.get("dependencies")
+    if not isinstance(dependencies, dict):
+        return {}
+
+    aliases: dict[str, Path] = {}
+    for alias, dependency in dependencies.items():
+        alias_name = normalize_crate_name(alias)
+        if not alias_name or not isinstance(dependency, dict):
+            continue
+        resolved = _resolve_local_dependency_entry(
+            alias_name=alias_name,
+            dependency=dependency,
+            base_dir=workspace_root,
+            package_index=package_index,
+            workspace_aliases={},
+        )
+        if resolved is not None:
+            aliases[alias_name] = resolved
+    return aliases
+
+
+def _iter_dependency_entries(data: dict[str, Any]) -> list[tuple[str, Any]]:
+    entries: list[tuple[str, Any]] = []
+    for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
+        section = data.get(section_name)
+        if isinstance(section, dict):
+            entries.extend((str(name), value) for name, value in section.items())
+    target = data.get("target")
+    if isinstance(target, dict):
+        for target_section in target.values():
+            if not isinstance(target_section, dict):
+                continue
+            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
+                section = target_section.get(section_name)
+                if isinstance(section, dict):
+                    entries.extend((str(name), value) for name, value in section.items())
+    return entries
+
+
+def _resolve_local_dependency_entry(
+    alias_name: str,
+    dependency: dict[str, Any],
+    *,
+    base_dir: Path,
+    package_index: dict[str, Path],
+    workspace_aliases: dict[str, Path],
+) -> Path | None:
+    path_value = dependency.get("path")
+    if isinstance(path_value, str) and path_value.strip():
+        candidate = (base_dir / path_value).resolve()
+        if (candidate / "Cargo.toml").is_file():
+            return candidate
+
+    if dependency.get("workspace") is True:
+        package_name = normalize_crate_name(dependency.get("package"))
+        if package_name and package_name in package_index:
+            return package_index[package_name]
+        return workspace_aliases.get(alias_name)
+
+    package_name = normalize_crate_name(dependency.get("package"))
+    if package_name and package_name in package_index and dependency.get("path") is not None:
+        return package_index[package_name]
+    return None
 
 
 def find_workspace_root(path: Path | str | None) -> Path:
@@ -154,9 +364,8 @@ def find_workspace_root(path: Path | str | None) -> Path:
         manifest = current / "Cargo.toml"
         if not manifest.is_file():
             continue
-        try:
-            data = tomllib.loads(manifest.read_text())
-        except (OSError, tomllib.TOMLDecodeError):
+        data = _load_toml_dict(manifest)
+        if data is None:
             continue
         workspace = data.get("workspace")
         if isinstance(workspace, dict):
@@ -169,6 +378,7 @@ def describe_rust_file(source_file: str | Path) -> RustFileContext:
     source = Path(resolve_path(str(source_file))).resolve()
     manifest_dir = find_manifest_dir(source) or get_project_root()
     package_name = read_package_name(manifest_dir)
+    library_crate_name = read_library_crate_name(manifest_dir)
     try:
         rel_to_manifest = source.relative_to(manifest_dir)
     except ValueError:
@@ -209,11 +419,12 @@ def describe_rust_file(source_file: str | Path) -> RustFileContext:
         )
 
     if parts[:1] == ("src",):
+        crate_name = package_name if rel_to_manifest == Path("src/main.rs") else library_crate_name
         return RustFileContext(
             source_file=source,
             manifest_dir=manifest_dir,
             package_name=package_name,
-            crate_name=package_name,
+            crate_name=crate_name,
             source_root=manifest_dir / "src",
             root_files=(
                 manifest_dir / "src" / "lib.rs",
@@ -254,6 +465,8 @@ def resolve_mod_declaration(
     module_name: str,
     source_file: str | Path,
     production_files: set[str],
+    *,
+    declared_path: str | None = None,
 ) -> str | None:
     """Resolve `mod foo;` to `foo.rs` or `foo/mod.rs` relative to the file's module dir."""
     source = Path(resolve_path(str(source_file))).resolve()
@@ -262,7 +475,11 @@ def resolve_mod_declaration(
         if source.name in {"lib.rs", "main.rs", "mod.rs", "build.rs"}
         else source.with_suffix("")
     )
-    for candidate in (base_dir / f"{module_name}.rs", base_dir / module_name / "mod.rs"):
+    candidates: list[Path] = []
+    if declared_path:
+        candidates.append(source.parent / declared_path)
+    candidates.extend((base_dir / f"{module_name}.rs", base_dir / module_name / "mod.rs"))
+    for candidate in candidates:
         matched = _candidate_matches(candidate, production_files)
         if matched:
             return matched
@@ -284,6 +501,10 @@ def resolve_use_spec(
 
     package_index = package_index or build_workspace_package_index()
     context = describe_rust_file(source_file)
+    dependency_aliases = build_local_dependency_alias_index(
+        context.manifest_dir,
+        package_index,
+    )
     segments = [segment for segment in cleaned.split("::") if segment]
     if not segments:
         return None
@@ -311,8 +532,8 @@ def resolve_use_spec(
             )
         )
     else:
-        first = segments[0]
-        manifest_dir = package_index.get(first)
+        first = normalize_crate_name(segments[0]) or segments[0]
+        manifest_dir = dependency_aliases.get(first) or package_index.get(first)
         if manifest_dir is not None:
             lib_root = manifest_dir / "src"
             candidates.append(
@@ -372,8 +593,13 @@ def resolve_barrel_targets(
         )
         if resolved:
             targets.add(resolved)
-    for module_name in iter_mod_declarations(content):
-        resolved = resolve_mod_declaration(module_name, filepath, production_files)
+    for module_name, declared_path in iter_mod_targets(content):
+        resolved = resolve_mod_declaration(
+            module_name,
+            filepath,
+            production_files,
+            declared_path=declared_path,
+        )
         if resolved:
             targets.add(resolved)
     return targets
@@ -548,21 +774,49 @@ def _normalize_use_spec(spec: str) -> str | None:
     return normalized or None
 
 
+def _path_override_from_attrs(attrs: list[str]) -> str | None:
+    for attr in reversed(attrs):
+        match = _PATH_ATTR_RE.search(attr)
+        if match:
+            value = match.group(1).strip()
+            if value:
+                return value
+    return None
+
+
+def _load_toml_dict(path: Path) -> dict[str, Any] | None:
+    """Parse a TOML file into a dictionary when possible."""
+    text = read_text_or_none(path)
+    if text is None:
+        return None
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 __all__ = [
     "RUST_FILE_EXCLUSIONS",
+    "PUB_USE_STATEMENT_RE",
     "RustFileContext",
+    "USE_STATEMENT_RE",
     "build_workspace_package_index",
+    "build_local_dependency_alias_index",
     "describe_rust_file",
     "find_manifest_dir",
     "find_rust_files",
     "find_workspace_root",
     "has_public_api_markers",
     "iter_mod_declarations",
+    "iter_mod_targets",
     "iter_pub_use_specs",
     "iter_use_specs",
     "match_production_candidate",
     "normalize_crate_name",
     "normalize_rust_body",
+    "read_text_or_none",
+    "read_library_crate_name",
     "read_package_name",
     "resolve_barrel_targets",
     "resolve_mod_declaration",

@@ -20,6 +20,7 @@ from desloppify.languages.rust.support import (
     RUST_FILE_EXCLUSIONS,
     find_rust_files,
     normalize_rust_body,
+    read_text_or_none,
 )
 
 _FUNC_DECL_RE = re.compile(
@@ -106,9 +107,8 @@ def _find_matching_brace(content: str, open_pos: int) -> int | None:
 
 def extract_rust_functions(filepath: str) -> list[FunctionInfo]:
     """Extract Rust functions from one file using a regex fallback."""
-    try:
-        content = Path(resolve_path(filepath)).read_text(errors="replace")
-    except OSError:
+    content = read_text_or_none(filepath)
+    if content is None:
         return []
 
     functions: list[FunctionInfo] = []
@@ -150,16 +150,27 @@ def extract_functions(path: Path) -> list[FunctionInfo]:
     if not file_list:
         return []
 
-    if is_available():
-        try:
-            return ts_extract_functions(path, RUST_SPEC, file_list)
-        except PARSE_INIT_ERRORS:
-            pass
+    tree_sitter_functions = _extract_with_tree_sitter(path, file_list)
+    if tree_sitter_functions is not None:
+        return tree_sitter_functions
 
     functions: list[FunctionInfo] = []
     for filepath in file_list:
         functions.extend(extract_rust_functions(filepath))
     return functions
+
+
+def _extract_with_tree_sitter(
+    path: Path,
+    file_list: list[str],
+) -> list[FunctionInfo] | None:
+    """Attempt Tree-sitter extraction when the parser runtime is available."""
+    if not is_available():
+        return None
+    try:
+        return ts_extract_functions(path, RUST_SPEC, file_list)
+    except PARSE_INIT_ERRORS:
+        return None
 
 
 __all__ = [

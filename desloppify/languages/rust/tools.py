@@ -42,9 +42,8 @@ def _parse_cargo_messages(
         line = raw_line.strip()
         if not line:
             continue
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = _parse_json_object_line(line)
+        if data is None:
             continue
         if data.get("reason") != "compiler-message":
             continue
@@ -74,6 +73,17 @@ def _parse_cargo_messages(
             }
         )
     return entries
+
+
+def _parse_json_object_line(line: str) -> dict[str, Any] | None:
+    """Parse one cargo JSON line, ignoring human-readable noise."""
+    if not line.startswith("{"):
+        return None
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def parse_clippy_messages(output: str, scan_path: Path) -> list[dict[str, Any]]:

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import colorize, display_entries
 from desloppify.languages._framework.commands_base import (
     make_cmd_complexity,
     make_cmd_large,
+    make_cmd_smells,
 )
 from desloppify.languages._framework.commands_base_registry import (
     build_standard_detect_registry,
@@ -21,14 +24,18 @@ from desloppify.languages._framework.commands_base_registry import (
     make_cmd_orphaned,
 )
 from desloppify.languages._framework.generic_parts.tool_runner import run_tool_result
-from desloppify.languages.rust.detectors.custom import (
+from desloppify.languages.rust.detectors import (
+    detect_async_locking,
     detect_doctest_hygiene,
+    detect_drop_safety,
     detect_error_boundaries,
     detect_feature_hygiene,
     detect_future_proofing,
     detect_import_hygiene,
     detect_public_api_conventions,
+    detect_smells,
     detect_thread_safety_contracts,
+    detect_unsafe_api_usage,
 )
 from desloppify.languages.rust.detectors.deps import build_dep_graph
 from desloppify.languages.rust.extractors import extract_functions, find_rust_files
@@ -46,6 +53,10 @@ from desloppify.languages.rust.tools import (
     parse_clippy_messages,
     parse_rustdoc_messages,
 )
+
+DetectCommand = Callable[[argparse.Namespace], None]
+EntryDetector = Callable[[Path], tuple[list[dict[str, Any]], int]]
+ToolOutputParser = Callable[[str, Path], list[dict[str, Any]]]
 
 cmd_large = make_cmd_large(
     find_rust_files,
@@ -86,9 +97,14 @@ cmd_orphaned = make_cmd_orphaned(
     module_name=__name__,
 )
 cmd_dupes = make_cmd_dupes(extract_functions_fn=extract_functions, module_name=__name__)
+cmd_smells = make_cmd_smells(detect_smells, module_name=__name__)
 
 
-def _make_tool_detect_command(label: str, cmd: str, parser):
+def _make_tool_detect_command(
+    label: str,
+    cmd: str,
+    parser: ToolOutputParser,
+) -> DetectCommand:
     def command(args: argparse.Namespace) -> None:
         result = run_tool_result(cmd, Path(args.path), parser)
         if result.status == "error":
@@ -132,9 +148,10 @@ def _make_tool_detect_command(label: str, cmd: str, parser):
 
     command.__module__ = __name__
     return command
-
-
-def _make_entry_detect_command(label: str, detector_fn):
+def _make_entry_detect_command(
+    label: str,
+    detector_fn: EntryDetector,
+) -> DetectCommand:
     def command(args: argparse.Namespace) -> None:
         entries, _ = detector_fn(Path(args.path))
         display_entries(
@@ -199,9 +216,21 @@ cmd_rust_thread_safety = _make_entry_detect_command(
     "Rust thread-safety contracts",
     detect_thread_safety_contracts,
 )
+cmd_rust_async_locking = _make_entry_detect_command(
+    "Rust async locking",
+    detect_async_locking,
+)
+cmd_rust_drop_safety = _make_entry_detect_command(
+    "Rust drop safety",
+    detect_drop_safety,
+)
+cmd_rust_unsafe_api = _make_entry_detect_command(
+    "Rust unsafe API usage",
+    detect_unsafe_api_usage,
+)
 
 
-def get_detect_commands():
+def get_detect_commands() -> dict[str, DetectCommand]:
     return compose_detect_registry(
         base_registry=build_standard_detect_registry(
             cmd_deps=cmd_deps,
@@ -212,6 +241,7 @@ def get_detect_commands():
             cmd_complexity=cmd_complexity,
         ),
         extra_registry={
+            "smells": cmd_smells,
             "clippy_warning": cmd_clippy_warning,
             "cargo_error": cmd_cargo_error,
             "rustdoc_warning": cmd_rustdoc_warning,
@@ -222,6 +252,9 @@ def get_detect_commands():
             "rust_error_boundary": cmd_rust_error_boundary,
             "rust_future_proofing": cmd_rust_future_proofing,
             "rust_thread_safety": cmd_rust_thread_safety,
+            "rust_async_locking": cmd_rust_async_locking,
+            "rust_drop_safety": cmd_rust_drop_safety,
+            "rust_unsafe_api": cmd_rust_unsafe_api,
         },
     )
 
@@ -235,13 +268,17 @@ __all__ = [
     "cmd_dupes",
     "cmd_large",
     "cmd_orphaned",
+    "cmd_smells",
     "cmd_rust_api_convention",
+    "cmd_rust_async_locking",
     "cmd_rust_doctest",
+    "cmd_rust_drop_safety",
     "cmd_rust_error_boundary",
     "cmd_rust_feature_hygiene",
     "cmd_rust_future_proofing",
     "cmd_rust_import_hygiene",
     "cmd_rust_thread_safety",
+    "cmd_rust_unsafe_api",
     "cmd_rustdoc_warning",
     "get_detect_commands",
 ]

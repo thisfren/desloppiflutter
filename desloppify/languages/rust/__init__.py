@@ -37,6 +37,7 @@ from desloppify.languages.rust.phases import (
     tool_phase_clippy,
     tool_phase_rustdoc,
 )
+from desloppify.languages.rust.phases_smells import phase_smells
 from desloppify.languages.rust.review import (
     HOLISTIC_REVIEW_DIMENSIONS,
     LOW_VALUE_PATTERN,
@@ -88,6 +89,7 @@ class RustConfig(LangConfig):
                 *all_treesitter_phases("rust"),
                 DetectorPhase("Signature analysis", phase_signature),
                 detector_phase_test_coverage(),
+                DetectorPhase("Code smells", phase_smells),
                 detector_phase_security(),
                 *shared_subjective_duplicates_tail(),
             ],

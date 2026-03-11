@@ -81,6 +81,54 @@ def test_build_dep_graph_resolves_workspace_local_crates(tmp_path):
     assert "crates/common/src/helpers.rs" in graph["app/src/lib.rs"]["imports"]
 
 
+def test_build_dep_graph_resolves_workspace_dependency_aliases(tmp_path):
+    _write(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["app", "support"]\n')
+    _write(
+        tmp_path,
+        "app/Cargo.toml",
+        """
+[package]
+name = "app"
+version = "0.1.0"
+
+[dependencies]
+support = { package = "support-utils", path = "../support" }
+""",
+    )
+    _write(
+        tmp_path,
+        "support/Cargo.toml",
+        '[package]\nname = "support-utils"\nversion = "0.1.0"\n',
+    )
+    _write(tmp_path, "support/src/lib.rs", "pub mod helpers;\n")
+    _write(tmp_path, "support/src/helpers.rs", "pub struct Thing;\n")
+    _write(tmp_path, "app/src/lib.rs", "use support::helpers::Thing;\n")
+
+    with runtime_scope(RuntimeContext(project_root=tmp_path)):
+        graph = build_dep_graph(tmp_path)
+
+    assert "support/src/helpers.rs" in graph["app/src/lib.rs"]["imports"]
+
+
+def test_build_dep_graph_resolves_custom_path_modules_and_restricted_mod_visibility(tmp_path):
+    _write(
+        tmp_path,
+        "Cargo.toml",
+        "[package]\nname = 'demo-app'\nversion = '0.1.0'\n",
+    )
+    _write(
+        tmp_path,
+        "src/lib.rs",
+        '#[path = "generated/api.rs"]\npub(super) mod api;\n',
+    )
+    _write(tmp_path, "src/generated/api.rs", "pub struct Api;\n")
+
+    with runtime_scope(RuntimeContext(project_root=tmp_path)):
+        graph = build_dep_graph(tmp_path)
+
+    assert graph["src/lib.rs"]["imports"] == {"src/generated/api.rs"}
+
+
 def test_build_dep_graph_ignores_external_crates(tmp_path):
     _write(
         tmp_path,
