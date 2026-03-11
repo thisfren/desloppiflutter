@@ -14,23 +14,37 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
+from shutil import which
 
 from desloppify.base.discovery.file_paths import rel
 
 logger = logging.getLogger(__name__)
 
 
+def _resolve_cli_executable(name: str) -> str:
+    """Return an absolute CLI path when available."""
+    return which(name) or name
+
+
 def _run_knip(path: Path, timeout: int = 120) -> dict | None:
     """Run ``npx knip --reporter json`` and return parsed JSON, or None on failure."""
     try:
+        # Static knip argv only; no shell expansion and executable path is resolved first.
         result = subprocess.run(
-            ["npx", "knip", "--reporter", "json", "--no-gitignore"],
+            [
+                _resolve_cli_executable("npx"),
+                "knip",
+                "--reporter",
+                "json",
+                "--no-gitignore",
+            ],
             capture_output=True,
             text=True,
             cwd=str(path),
             timeout=timeout,
+            shell=False,  # nosec B603
         )
     except FileNotFoundError:
         logger.debug("knip: npx not found")

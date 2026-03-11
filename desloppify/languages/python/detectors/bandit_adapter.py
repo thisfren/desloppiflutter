@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
+import subprocess  # nosec B404
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import which
 from typing import Literal
 
 from desloppify.base.discovery.file_paths import rel
@@ -58,6 +59,11 @@ _BANDIT_IMPACT_TEXT = (
 
 
 BanditRunState = Literal["ok", "missing_tool", "timeout", "error", "parse_error"]
+
+
+def _resolve_cli_executable(name: str) -> str:
+    """Return an absolute CLI path when available."""
+    return which(name) or name
 
 
 @dataclass(frozen=True)
@@ -209,12 +215,14 @@ def detect_with_bandit(
     cmd.append(str(path.resolve()))
 
     try:
+        # Static bandit argv only; no shell expansion and executable path is resolved first.
         result = subprocess.run(
-            cmd,
+            [_resolve_cli_executable(cmd[0]), *cmd[1:]],
             capture_output=True,
             text=True,
             cwd=get_project_root(),
             timeout=timeout,
+            shell=False,  # nosec B603
         )
     except FileNotFoundError:
         logger.debug("bandit: not installed — Python-specific security checks will be skipped")

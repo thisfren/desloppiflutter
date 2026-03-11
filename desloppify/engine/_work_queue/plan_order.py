@@ -14,6 +14,30 @@ from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.state import StateModel
 
 
+def _cluster_issue_ids(cluster: dict[str, Any]) -> list[str]:
+    """Return effective cluster members, including step-linked issue refs."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _append(raw_ids: object) -> None:
+        if not isinstance(raw_ids, list):
+            return
+        for raw_id in raw_ids:
+            if not isinstance(raw_id, str):
+                continue
+            issue_id = raw_id.strip()
+            if not issue_id or issue_id in seen:
+                continue
+            seen.add(issue_id)
+            ordered.append(issue_id)
+
+    _append(cluster.get("issue_ids"))
+    for step in cluster.get("action_steps", []):
+        if isinstance(step, dict):
+            _append(step.get("issue_refs"))
+    return ordered
+
+
 def new_item_ids(state: StateModel) -> set[str]:
     """Return issue IDs added in the most recent scan."""
     scan_history = state.get("scan_history", [])
@@ -48,7 +72,7 @@ def enrich_plan_metadata(items: list[WorkQueueItem], plan: dict) -> None:
             item["plan_cluster"] = {
                 "name": cluster_name,
                 "description": cluster_data.get("description"),
-                "total_items": len(cluster_data.get("issue_ids", [])),
+                "total_items": len(_cluster_issue_ids(cluster_data)),
                 "action_steps": cluster_data.get("action_steps") or [],
             }
 
@@ -122,7 +146,7 @@ def filter_cluster_focus(
         return items
     clusters: dict = plan.get("clusters", {})
     cluster_data = clusters.get(effective_cluster, {})
-    cluster_member_ids = set(cluster_data.get("issue_ids", []))
+    cluster_member_ids = set(_cluster_issue_ids(cluster_data))
     if not cluster_member_ids:
         return items
     return [item for item in items if item["id"] in cluster_member_ids]
@@ -169,7 +193,7 @@ def _build_cluster_meta(
             action_type = "refactor"
 
     stored_desc = cluster_data.get("description") or ""
-    total_in_cluster = len(cluster_data.get("issue_ids", []))
+    total_in_cluster = len(_cluster_issue_ids(cluster_data))
     if stored_desc and total_in_cluster != len(members):
         summary = stored_desc.replace(str(total_in_cluster), str(len(members)))
     else:
@@ -220,7 +244,7 @@ def collapse_clusters(items: list[WorkQueueItem], plan: dict) -> list[WorkQueueI
 
     fid_to_cluster: dict[str, str] = {}
     for name, cluster in clusters.items():
-        for issue_id in cluster.get("issue_ids", []):
+        for issue_id in _cluster_issue_ids(cluster):
             # Manual clusters take priority when an issue is in both
             if issue_id not in fid_to_cluster or not cluster.get("auto"):
                 fid_to_cluster[issue_id] = name

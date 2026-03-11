@@ -235,6 +235,56 @@ def has_open_review_issues(state: StateModel | dict | None) -> bool:
     return bool(open_review_ids_from_state(state or {}))
 
 
+def cluster_issue_ids(cluster: Cluster) -> list[str]:
+    """Return the effective issue IDs for a cluster.
+
+    Some saved triage plans only retain issue membership via
+    ``action_steps[*].issue_refs`` after later workflow mutations clear
+    ``issue_ids``. Treat those refs as the durable cluster membership so
+    coverage and completion can continue without rebuilding the plan.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _append(raw_ids: object) -> None:
+        if not isinstance(raw_ids, list):
+            return
+        for raw_id in raw_ids:
+            if not isinstance(raw_id, str):
+                continue
+            issue_id = raw_id.strip()
+            if not issue_id or issue_id in seen:
+                continue
+            seen.add(issue_id)
+            ordered.append(issue_id)
+
+    _append(cluster.get("issue_ids"))
+
+    steps = cluster.get("action_steps")
+    if isinstance(steps, list):
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            _append(step.get("issue_refs"))
+
+    return ordered
+
+
+def _cluster_issue_ids(cluster: Cluster) -> list[str]:
+    """Backward-compatible alias for internal imports."""
+    return cluster_issue_ids(cluster)
+
+
+def plan_review_ids(plan: PlanModel) -> list[str]:
+    """Return review/concerns IDs currently represented in queue_order."""
+    return [
+        fid for fid in _queue_order(plan)
+        if not fid.startswith("triage::")
+        and not fid.startswith("workflow::")
+        and (fid.startswith("review::") or fid.startswith("concerns::"))
+    ]
+
+
 def triage_coverage(
     plan: PlanModel,
     open_review_ids: set[str] | None = None,
@@ -247,14 +297,11 @@ def triage_coverage(
     clusters = _cluster_map(plan)
     all_cluster_ids: set[str] = set()
     for c in clusters.values():
-        all_cluster_ids.update(c.get("issue_ids", []))
+        all_cluster_ids.update(cluster_issue_ids(c))
     if open_review_ids is not None:
         review_ids = list(open_review_ids)
     else:
-        review_ids = [
-            fid for fid in _queue_order(plan)
-            if not fid.startswith("triage::") and not fid.startswith("workflow::") and (fid.startswith("review::") or fid.startswith("concerns::"))
-        ]
+        review_ids = plan_review_ids(plan)
     organized = sum(1 for fid in review_ids if fid in all_cluster_ids)
     return organized, len(review_ids), clusters
 
@@ -262,7 +309,7 @@ def triage_coverage(
 def manual_clusters_with_issues(plan: PlanModel) -> list[str]:
     return [
         name for name, c in _cluster_map(plan).items()
-        if c.get("issue_ids") and not c.get("auto")
+        if cluster_issue_ids(c) and not c.get("auto")
     ]
 
 def apply_completion(
@@ -279,8 +326,13 @@ def apply_completion(
     runtime = resolved_services.command_runtime(args)
     state = runtime.state
 
+    has_completed_scan = bool(state.get("last_scan"))
+    coverage_open_ids = open_review_ids_from_state(state)
+    if not has_completed_scan and not coverage_open_ids:
+        coverage_open_ids = set(plan_review_ids(plan))
+
     organized, total, clusters = triage_coverage(
-        plan, open_review_ids=open_review_ids_from_state(state),
+        plan, open_review_ids=coverage_open_ids,
     )
 
     purge_ids(plan, [
@@ -289,9 +341,12 @@ def apply_completion(
         WORKFLOW_CREATE_PLAN_ID,
     ])
 
-    current_hash = review_issue_snapshot_hash(state)
-
     meta = _triage_meta(plan)
+    if has_completed_scan:
+        meta["issue_snapshot_hash"] = review_issue_snapshot_hash(state)
+    elif not meta.get("issue_snapshot_hash"):
+        meta.pop("issue_snapshot_hash", None)
+
     normalized_strategy = _normalize_summary_text(strategy)
     existing_strategy = _normalize_summary_text(meta.get("strategy_summary", ""))
     normalized_note = _normalize_summary_text(completion_note)
@@ -301,8 +356,7 @@ def apply_completion(
         existing_strategy=existing_strategy,
         completion_note=normalized_note,
     )
-    meta["issue_snapshot_hash"] = current_hash
-    open_ids = sorted(open_review_ids(state))
+    open_ids = sorted(coverage_open_ids)
     meta["triaged_ids"] = open_ids
     if effective_strategy_summary:
         meta["strategy_summary"] = effective_strategy_summary
@@ -336,7 +390,7 @@ def apply_completion(
 
     resolved_services.save_plan(plan)
 
-    cluster_count = len([c for c in clusters.values() if c.get("issue_ids")])
+    cluster_count = len([c for c in clusters.values() if cluster_issue_ids(c)])
     print(colorize(f"  Triage complete: {organized}/{total} issues in {cluster_count} cluster(s).", "green"))
     if completion_mode == "confirm_existing":
         print(
@@ -353,7 +407,7 @@ def apply_completion(
 
 def find_cluster_for(fid: str, clusters: dict[str, Cluster]) -> str | None:
     for name, c in clusters.items():
-        if fid in c.get("issue_ids", []):
+        if fid in cluster_issue_ids(c):
             return name
     return None
 
@@ -374,6 +428,7 @@ def count_log_activity_since(plan: PlanModel, since: str) -> dict[str, int]:
 __all__ = [
     "apply_completion",
     "cascade_clear_later_confirmations",
+    "cluster_issue_ids",
     "count_log_activity_since",
     "find_cluster_for",
     "group_issues_into_observe_batches",
@@ -383,6 +438,7 @@ __all__ = [
     "manual_clusters_with_issues",
     "observe_dimension_breakdown",
     "open_review_ids_from_state",
+    "plan_review_ids",
     "print_cascade_clear_feedback",
     "purge_triage_stage",
     "triage_coverage",

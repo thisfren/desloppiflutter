@@ -14,7 +14,12 @@ from .shared import (
     finalize_stage_confirmation,
 )
 from ..display.dashboard import show_plan_summary
-from ..helpers import count_log_activity_since, open_review_ids_from_state, triage_coverage
+from ..helpers import (
+    cluster_issue_ids,
+    count_log_activity_since,
+    open_review_ids_from_state,
+    triage_coverage,
+)
 from ..services import TriageServices, default_triage_services
 
 
@@ -139,7 +144,7 @@ def confirm_organize(
     orphaned = [
         (name, len(cluster.get("action_steps", [])))
         for name, cluster in all_clusters.items()
-        if not cluster.get("auto") and not cluster.get("issue_ids") and cluster.get("action_steps")
+        if not cluster.get("auto") and not cluster_issue_ids(cluster) and cluster.get("action_steps")
     ]
     if orphaned:
         print(colorize(f"\n  Note: {len(orphaned)} cluster(s) have steps but no issues:", "yellow"))

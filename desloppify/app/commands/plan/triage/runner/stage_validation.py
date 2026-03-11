@@ -26,6 +26,7 @@ from ..validation.core import (
     _underspecified_steps,
 )
 from ..helpers import (
+    cluster_issue_ids,
     count_log_activity_since,
     manual_clusters_with_issues,
     observe_dimension_breakdown,
@@ -204,7 +205,7 @@ def _organize_stage_warnings(plan: dict) -> list[str]:
     clusters = plan.get("clusters", {})
     orphaned = [
         name for name, cluster in clusters.items()
-        if not cluster.get("auto") and not cluster.get("issue_ids") and cluster.get("action_steps")
+        if not cluster.get("auto") and not cluster_issue_ids(cluster) and cluster.get("action_steps")
     ]
     if orphaned:
         warnings.append(f"Orphaned clusters (steps, no issues): {', '.join(orphaned)}")
@@ -348,7 +349,7 @@ def _find_all_trivial_clusters(clusters: dict) -> list[str]:
     """Return manual clusters whose action steps are all marked trivial."""
     trivial_clusters: list[str] = []
     for name, cluster in clusters.items():
-        if cluster.get("auto") or not cluster.get("issue_ids"):
+        if cluster.get("auto") or not cluster_issue_ids(cluster):
             continue
         steps = cluster.get("action_steps") or []
         if steps and all(

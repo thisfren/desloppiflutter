@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
+import subprocess  # nosec B404
 from collections import defaultdict
 from pathlib import Path
+from shutil import which
 
 from desloppify.base.discovery.source import collect_exclude_dirs as _collect_exclude_dirs
 from desloppify.base.discovery.source import get_exclusions as _get_exclusions
@@ -59,6 +60,11 @@ _RULE_MAP: dict[str, tuple[str, str, str]] = {
 _SELECT = ",".join(_RULE_MAP)
 
 
+def _resolve_cli_executable(name: str) -> str:
+    """Return an absolute CLI path when available."""
+    return which(name) or name
+
+
 def detect_with_ruff_smells(path: Path) -> list[dict] | None:
     """Run ruff on supplemental B/E/W rules and return smell entries, or None on failure.
 
@@ -85,12 +91,14 @@ def detect_with_ruff_smells(path: Path) -> list[dict] | None:
     cmd.append(str(path))
 
     try:
+        # Static ruff argv only; no shell expansion and executable path is resolved first.
         result = subprocess.run(
-            cmd,
+            [_resolve_cli_executable(cmd[0]), *cmd[1:]],
             capture_output=True,
             text=True,
             cwd=get_project_root(),
             timeout=60,
+            shell=False,  # nosec B603
         )
     except FileNotFoundError:
         logger.debug("ruff smells: ruff not found — skipping supplemental smell detection")

@@ -51,6 +51,7 @@ from .enrich_checks import (
 )
 from ..confirmations.basic import MIN_ATTESTATION_LEN, validate_attestation
 from ..helpers import (
+    cluster_issue_ids,
     manual_clusters_with_issues,
     observe_dimension_breakdown,
 )
@@ -348,7 +349,10 @@ def _manual_clusters_or_error(
         return manual_clusters
     if open_review_ids is not None and not open_review_ids:
         return []
-    any_clusters = [name for name, cluster in plan.get("clusters", {}).items() if cluster.get("issue_ids")]
+    any_clusters = [
+        name for name, cluster in plan.get("clusters", {}).items()
+        if cluster_issue_ids(cluster)
+    ]
     if any_clusters:
         print(colorize("  Cannot organize: only auto-clusters exist.", "red"))
         print(colorize("  Create manual clusters that group issues by root cause:", "dim"))

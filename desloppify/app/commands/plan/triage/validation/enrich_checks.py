@@ -7,6 +7,8 @@ from pathlib import Path
 
 from desloppify.base.output.terminal import colorize
 
+from ..helpers import cluster_issue_ids
+
 _PATH_RE = re.compile(r"(?:src|supabase)/[\w./-]+\.\w+")
 _EXT_SWAPS = {".ts": ".tsx", ".tsx": ".ts", ".js": ".jsx", ".jsx": ".js"}
 _VALID_EFFORTS = {"trivial", "small", "medium", "large"}
@@ -15,7 +17,7 @@ _VALID_EFFORTS = {"trivial", "small", "medium", "large"}
 def _manual_clusters_with_issues(plan: dict):
     """Yield manual clusters that still carry issue IDs."""
     for name, cluster in plan.get("clusters", {}).items():
-        if cluster.get("auto") or not cluster.get("issue_ids"):
+        if cluster.get("auto") or not cluster_issue_ids(cluster):
             continue
         yield name, cluster
 
@@ -162,7 +164,7 @@ def _clusters_with_high_step_ratio(
     results: list[tuple[str, int, int, float]] = []
     for name, cluster in _manual_clusters_with_issues(plan):
         steps = len(_cluster_steps(cluster))
-        issues = len(cluster.get("issue_ids") or [])
+        issues = len(cluster_issue_ids(cluster))
         if issues >= 3 and steps > 0:
             ratio = steps / issues
             if ratio > max_ratio:

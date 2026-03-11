@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any

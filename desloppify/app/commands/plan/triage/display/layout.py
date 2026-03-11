@@ -24,6 +24,7 @@ from desloppify.base.output.terminal import colorize
 
 from .primitives import print_stage_progress
 from ..helpers import (
+    cluster_issue_ids,
     find_cluster_for,
     manual_clusters_with_issues,
     open_review_ids_from_state,
@@ -218,13 +219,17 @@ def print_issues_by_dimension(open_issues: dict) -> None:
 def show_plan_summary(plan: dict, state: dict) -> None:
     """Print a compact plan rendering: clusters + queue order + coverage."""
     clusters = plan.get("clusters", {})
-    active = {name: cluster for name, cluster in clusters.items() if cluster.get("issue_ids") and not cluster.get("auto")}
+    active = {
+        name: cluster
+        for name, cluster in clusters.items()
+        if cluster_issue_ids(cluster) and not cluster.get("auto")
+    }
     issues = state.get("issues", {})
 
     if active:
         print(colorize(f"\n  Clusters ({len(active)}):", "bold"))
         for name, cluster in active.items():
-            count = len(cluster.get("issue_ids", []))
+            count = len(cluster_issue_ids(cluster))
             steps = len(cluster.get("action_steps", []))
             desc = (cluster.get("description") or "")[:60]
             print(f"    {name}: {count} items, {steps} steps — {desc}")

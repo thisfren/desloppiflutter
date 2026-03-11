@@ -256,6 +256,9 @@ def _planned_item_ids(plan: dict) -> set[str]:
     tracked_ids.update(plan.get("overrides", {}).keys())
     for cluster in plan.get("clusters", {}).values():
         tracked_ids.update(cluster.get("issue_ids", []))
+        for step in cluster.get("action_steps", []):
+            if isinstance(step, dict):
+                tracked_ids.update(step.get("issue_refs", []))
     subjective_defer_meta = plan.get("subjective_defer_meta", {})
     if isinstance(subjective_defer_meta, dict):
         tracked_ids.update(subjective_defer_meta.get("force_visible_ids", []))

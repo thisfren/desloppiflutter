@@ -9,10 +9,10 @@ import argparse
 import json
 import logging
 import re
-import subprocess
-import sys
+import subprocess  # nosec B404
 from collections import defaultdict
 from pathlib import Path
+from shutil import which
 
 from desloppify.base.discovery.file_paths import rel, resolve_path, safe_write_text
 from desloppify.base.discovery.paths import get_project_root
@@ -40,6 +40,11 @@ _detect_unused_fallback = detect_unused_fallback
 _should_use_deno_fallback = should_use_deno_fallback
 
 
+def _resolve_cli_executable(name: str) -> str:
+    """Return an absolute CLI path when available."""
+    return which(name) or name
+
+
 def detect_unused(path: Path, category: str = "all") -> tuple[list[dict], int]:
     ts_files = find_ts_and_tsx_files(path)
     total_files = len(ts_files)
@@ -57,13 +62,20 @@ def detect_unused(path: Path, category: str = "all") -> tuple[list[dict], int]:
     try:
         safe_write_text(tmp_path, json.dumps(tmp_tsconfig, indent=2))
         try:
+            # Static tsc argv only; no shell expansion and executable path is resolved first.
             result = subprocess.run(
-                ["npx", "tsc", "--project", str(tmp_path), "--noEmit"],
+                [
+                    _resolve_cli_executable("npx"),
+                    "tsc",
+                    "--project",
+                    str(tmp_path),
+                    "--noEmit",
+                ],
                 capture_output=True,
                 text=True,
                 cwd=get_project_root(),
                 timeout=120,
-                shell=(sys.platform == "win32"),
+                shell=False,  # nosec B603
             )
         except (subprocess.SubprocessError, OSError) as exc:
             logger.debug("Falling back to source-based unused detection: %s", exc)
