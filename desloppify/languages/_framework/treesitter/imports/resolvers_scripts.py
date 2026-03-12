@@ -27,6 +27,23 @@ def resolve_ruby_import(import_text: str, source_file: str, scan_path: str) -> s
 _PHP_FILE_CACHE: dict[tuple[str, str], str | None] = {}
 
 
+def reset_script_import_caches(scan_path: str | None = None) -> None:
+    """Reset cached script import resolution state globally or for one scan path."""
+    if scan_path is None:
+        _PHP_FILE_CACHE.clear()
+        _PHP_COMPOSER_CACHE.clear()
+        return
+
+    normalized_scan_path = os.path.normpath(scan_path)
+    stale_file_keys = [
+        key for key in _PHP_FILE_CACHE
+        if os.path.normpath(key[1]) == normalized_scan_path
+    ]
+    for key in stale_file_keys:
+        _PHP_FILE_CACHE.pop(key, None)
+    _PHP_COMPOSER_CACHE.pop(normalized_scan_path, None)
+
+
 def _find_php_file(filename: str, scan_path: str) -> str | None:
     """Search common PHP source roots for *filename*, cached."""
     key = (filename, scan_path)
@@ -53,13 +70,14 @@ def _read_composer_psr4(scan_path: str) -> dict[str, str]:
 
     Returns ``{namespace_prefix: directory}`` e.g. ``{"App\\\\": "app/"}``.
     """
-    if scan_path in _PHP_COMPOSER_CACHE:
-        return _PHP_COMPOSER_CACHE[scan_path]
+    normalized_scan_path = os.path.normpath(scan_path)
+    if normalized_scan_path in _PHP_COMPOSER_CACHE:
+        return _PHP_COMPOSER_CACHE[normalized_scan_path]
 
     mappings: dict[str, str] = {}
-    composer_path = os.path.join(scan_path, "composer.json")
+    composer_path = os.path.join(normalized_scan_path, "composer.json")
     if not os.path.isfile(composer_path):
-        _PHP_COMPOSER_CACHE[scan_path] = mappings
+        _PHP_COMPOSER_CACHE[normalized_scan_path] = mappings
         return mappings
     try:
         with open(composer_path) as f:
@@ -74,7 +92,7 @@ def _read_composer_psr4(scan_path: str) -> dict[str, str]:
                     mappings[prefix] = dirs[0]
     except (OSError, ValueError, TypeError, AttributeError):
         return mappings
-    _PHP_COMPOSER_CACHE[scan_path] = mappings
+    _PHP_COMPOSER_CACHE[normalized_scan_path] = mappings
     return mappings
 
 

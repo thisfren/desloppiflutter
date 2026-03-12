@@ -81,6 +81,7 @@ def test_public_framework_facade_exposes_operational_accessors() -> None:
     assert "Public framework facade" in source
     assert callable(public_framework_mod.load_all)
     assert callable(public_framework_mod.make_lang_config)
+    assert callable(public_framework_mod.reset_script_import_caches)
     assert hasattr(public_framework_mod, "registry_state")
 
 

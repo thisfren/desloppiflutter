@@ -5,11 +5,10 @@ from __future__ import annotations
 import importlib
 import logging
 import sys
-from collections import defaultdict
+
+from desloppify.languages._framework import registry_state
 
 logger = logging.getLogger(__name__)
-
-_hooks: dict[str, dict[str, object]] = defaultdict(dict)
 
 
 def register_lang_hooks(
@@ -18,9 +17,8 @@ def register_lang_hooks(
     test_coverage: object | None = None,
 ) -> None:
     """Register optional detector hook modules for a language."""
-    hooks = _hooks[lang_name]
     if test_coverage is not None:
-        hooks["test_coverage"] = test_coverage
+        registry_state.register_hook(lang_name, "test_coverage", test_coverage)
 
 
 def _bootstrap_language_module(module: object) -> None:
@@ -59,7 +57,7 @@ def _get_lang_hook(
 ) -> object | None:
     if not lang_name:
         return None
-    hook = _hooks.get(lang_name, {}).get(hook_name)
+    hook = registry_state.get_hook(lang_name, hook_name)
     if hook is not None:
         return hook
 
@@ -82,7 +80,7 @@ def _get_lang_hook(
         )
         return None
 
-    return _hooks.get(lang_name, {}).get(hook_name)
+    return registry_state.get_hook(lang_name, hook_name)
 
 
 def get_lang_hook(
@@ -93,12 +91,18 @@ def get_lang_hook(
     return _get_lang_hook(lang_name, hook_name)
 
 
+def clear_lang_hooks() -> None:
+    """Clear registered language hooks."""
+    registry_state.clear_hooks()
+
+
 def clear_lang_hooks_for_tests() -> None:
-    """Clear registry (test helper)."""
-    _hooks.clear()
+    """Compatibility wrapper for older test helpers."""
+    clear_lang_hooks()
 
 
 __all__ = [
+    "clear_lang_hooks",
     "clear_lang_hooks_for_tests",
     "get_lang_hook",
     "register_lang_hooks",

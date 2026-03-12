@@ -52,6 +52,13 @@ def is_parse_cache_enabled() -> bool:
     return _is_enabled()
 
 
+def reset_script_import_caches(scan_path: str | None = None) -> None:
+    """Clear script import resolver caches for a scan path or the whole process."""
+    from .imports.resolvers_scripts import reset_script_import_caches as _reset
+
+    _reset(scan_path)
+
+
 PARSE_INIT_ERRORS: tuple[type[Exception], ...] = (
     ImportError,
     OSError,
@@ -155,4 +162,5 @@ __all__ = [
     "make_ast_smells_phase",
     "make_cohesion_phase",
     "make_unused_imports_phase",
+    "reset_script_import_caches",
 ]

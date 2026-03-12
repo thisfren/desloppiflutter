@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import desloppify.engine.hook_registry as hook_registry_mod
-
 from . import registry_state
 from .base.types import LangConfig
 from .contract_validation import validate_lang_contract
-from .discovery import load_all
+from .discovery import load_all, reset_runtime_state
 
 _MARKER_GLOB_CHARS = ("*", "?", "[")
 
@@ -21,7 +19,7 @@ def _reset_dynamic_registries_for_refresh() -> None:
 
     reset_registered_detectors()
     reset_registered_scoring_policies()
-    hook_registry_mod.clear_lang_hooks_for_tests()
+    reset_runtime_state()
 
 
 def make_lang_config(name: str, cfg_cls: type) -> LangConfig:

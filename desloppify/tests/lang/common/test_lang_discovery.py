@@ -197,3 +197,13 @@ def test_load_all_propagates_unexpected_user_plugin_errors(monkeypatch, tmp_path
     registry_state.set_load_errors({})
     with pytest.raises(RuntimeError, match="plugin gate crash"):
         load_all()
+
+
+def test_reset_runtime_state_clears_registry_and_hooks():
+    registry_state.register("python", object())
+    registry_state.register_hook("python", "test_coverage", object())
+
+    discovery_mod.reset_runtime_state()
+
+    assert registry_state.all_keys() == []
+    assert registry_state.get_hook("python", "test_coverage") is None

@@ -62,6 +62,15 @@ def disable_parse_cache() -> None:
     _disable_parse_cache()
 
 
+def reset_script_import_caches(scan_path: str | None = None) -> None:
+    """Reset script import resolver caches via the public framework boundary."""
+    from desloppify.languages._framework.treesitter import (
+        reset_script_import_caches as _reset_script_import_caches,
+    )
+
+    _reset_script_import_caches(scan_path)
+
+
 __all__ = [
     "BoundaryRule",
     "LangConfig",
@@ -83,5 +92,6 @@ __all__ = [
     "load_all",
     "make_lang_run",
     "make_lang_config",
+    "reset_script_import_caches",
     "shared_phase_labels",
 ]

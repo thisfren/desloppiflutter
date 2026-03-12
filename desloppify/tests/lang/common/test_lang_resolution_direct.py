@@ -148,3 +148,27 @@ def test_available_langs_returns_sorted_list(monkeypatch):
     langs = lang_resolution_mod.available_langs()
     assert langs == ["alpha", "zeta"]
     assert langs[0] < langs[1]
+
+
+def test_reset_dynamic_registries_for_refresh_uses_discovery_runtime_boundary(
+    monkeypatch,
+):
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        lang_resolution_mod,
+        "reset_runtime_state",
+        lambda: calls.append("runtime"),
+    )
+    monkeypatch.setattr(
+        "desloppify.base.registry.reset_registered_detectors",
+        lambda: calls.append("detectors"),
+    )
+    monkeypatch.setattr(
+        "desloppify.engine._scoring.policy.core.reset_registered_scoring_policies",
+        lambda: calls.append("scoring"),
+    )
+
+    lang_resolution_mod._reset_dynamic_registries_for_refresh()
+
+    assert calls == ["detectors", "scoring", "runtime"]

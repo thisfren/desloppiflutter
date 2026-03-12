@@ -84,10 +84,15 @@ def _user_plugins_trusted(*, load_config_fn=None) -> bool:
         return False
 
 
+def reset_runtime_state() -> None:
+    """Clear mutable language discovery runtime state behind one boundary."""
+    registry_state.clear()
+
+
 def load_all(*, force_reload: bool = False) -> None:
     """Import all language modules to trigger registration."""
     if force_reload:
-        registry_state.clear()
+        reset_runtime_state()
     elif registry_state.was_load_attempted() and registry_state.all_keys():
         _report_load_errors_for_load_all()
         return

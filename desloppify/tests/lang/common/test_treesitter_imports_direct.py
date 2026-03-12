@@ -299,3 +299,21 @@ def test_script_import_resolver_returns_empty_psr4_mapping_on_read_error(
 
     monkeypatch.setattr(builtins, "open", _boom)
     assert scripts_mod._read_composer_psr4(str(tmp_path)) == {}
+
+
+def test_script_import_cache_reset_invalidates_php_lookup_state(tmp_path: Path) -> None:
+    scripts_mod.reset_script_import_caches()
+
+    first_file = tmp_path / "app" / "User.php"
+    first_file.parent.mkdir(parents=True, exist_ok=True)
+    first_file.write_text("<?php\n", encoding="utf-8")
+    assert scripts_mod.resolve_php_import("User", "", str(tmp_path)) == str(first_file)
+
+    first_file.unlink()
+    second_file = tmp_path / "lib" / "User.php"
+    second_file.parent.mkdir(parents=True, exist_ok=True)
+    second_file.write_text("<?php\n", encoding="utf-8")
+
+    scripts_mod.reset_script_import_caches(str(tmp_path))
+
+    assert scripts_mod.resolve_php_import("User", "", str(tmp_path)) == str(second_file)

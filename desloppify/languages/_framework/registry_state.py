@@ -14,6 +14,9 @@ __all__ = [
     "get",
     "all_items",
     "all_keys",
+    "register_hook",
+    "get_hook",
+    "clear_hooks",
     "is_registered",
     "remove",
     "clear",
@@ -30,6 +33,7 @@ class _RegistryState:
     """Mutable language-registry state container."""
 
     registry: dict[str, LangConfig] = field(default_factory=dict)
+    hooks: dict[str, dict[str, object]] = field(default_factory=dict)
     load_attempted: bool = False
     load_errors: dict[str, BaseException] = field(default_factory=dict)
 
@@ -60,6 +64,22 @@ def all_keys() -> list[str]:
     return list(_STATE.registry.keys())
 
 
+def register_hook(lang_name: str, hook_name: str, hook: object) -> None:
+    """Register a language hook inside the shared runtime state."""
+    hooks = _STATE.hooks.setdefault(lang_name, {})
+    hooks[hook_name] = hook
+
+
+def get_hook(lang_name: str, hook_name: str) -> object | None:
+    """Return a previously-registered language hook, if present."""
+    return _STATE.hooks.get(lang_name, {}).get(hook_name)
+
+
+def clear_hooks() -> None:
+    """Clear all registered language hooks."""
+    _STATE.hooks.clear()
+
+
 def is_registered(name: str) -> bool:
     """Check if a language is registered."""
     return name in _STATE.registry
@@ -73,6 +93,7 @@ def remove(name: str) -> None:
 def clear() -> None:
     """Full reset: registrations, load-attempted flag, and load errors."""
     _STATE.registry.clear()
+    _STATE.hooks.clear()
     _STATE.load_attempted = False
     _STATE.load_errors.clear()
 
