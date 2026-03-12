@@ -32,6 +32,11 @@ examples:
         help="Stage report text",
     )
     p_triage.add_argument(
+        "--report-file", type=str, default=None,
+        dest="report_file",
+        help="Read stage report text from a file (--report takes precedence)",
+    )
+    p_triage.add_argument(
         "--complete", action="store_true", default=False,
         help="Mark triage complete",
     )

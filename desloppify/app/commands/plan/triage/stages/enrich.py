@@ -20,6 +20,7 @@ from ..validation.enrich_checks import (
     _underspecified_steps,
 )
 from ..helpers import (
+    active_triage_issue_ids,
     count_log_activity_since,
     has_triage_in_queue,
     open_review_ids_from_state,
@@ -258,6 +259,7 @@ def run_stage_enrich(
     if get_project_root is None:
         from desloppify.base.discovery.paths import get_project_root
 
+    triage_ids = active_triage_issue_ids(plan, state) or None
     quality_report = evaluate_enrich_quality(
         plan,
         get_project_root(),
@@ -267,6 +269,7 @@ def run_stage_enrich(
         include_missing_issue_refs=False,
         include_vague_detail=False,
         stale_issue_refs_severity=None,
+        triage_issue_ids=triage_ids,
     )
     underspec = quality_report.failure("underspecified")
     total_bare = underspec.total if underspec else 0

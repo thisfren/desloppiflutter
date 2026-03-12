@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from .enrich_checks import (
+    _manual_clusters_with_issues,
     _steps_missing_issue_refs,
     _steps_referencing_skipped_issues,
     _steps_with_bad_paths,
@@ -14,6 +15,7 @@ from .enrich_checks import (
     _steps_without_effort,
     _underspecified_steps,
 )
+from ..helpers import cluster_issue_ids
 
 Severity = Literal["failure", "warning"]
 
@@ -71,6 +73,19 @@ def _append_issue(
     )
 
 
+def _filter_plan_to_triage_clusters(plan: dict, triage_issue_ids: set[str]) -> dict:
+    """Return a plan copy with clusters filtered to only those containing triage issue IDs."""
+    filtered = dict(plan)
+    original_clusters = plan.get("clusters", {})
+    filtered_clusters = {}
+    for name, cluster in original_clusters.items():
+        cids = cluster_issue_ids(cluster)
+        if not cids or cids & triage_issue_ids:
+            filtered_clusters[name] = cluster
+    filtered["clusters"] = filtered_clusters
+    return filtered
+
+
 def evaluate_enrich_quality(
     plan: dict,
     repo_root: Path,
@@ -81,8 +96,12 @@ def evaluate_enrich_quality(
     include_missing_issue_refs: bool,
     include_vague_detail: bool,
     stale_issue_refs_severity: Severity | None,
+    triage_issue_ids: set[str] | None = None,
 ) -> EnrichQualityReport:
     """Evaluate executor-readiness checks for enrich-level stage data."""
+    if triage_issue_ids:
+        plan = _filter_plan_to_triage_clusters(plan, triage_issue_ids)
+
     failures: list[EnrichQualityIssue] = []
     warnings: list[EnrichQualityIssue] = []
     sink = {"failure": failures, "warning": warnings}

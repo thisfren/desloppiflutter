@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+from pathlib import Path
 
 from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan_triage import TRIAGE_CMD_OBSERVE
@@ -126,6 +127,24 @@ def _run_dry_run(
     print(prompt)
 
 
+def _resolve_report_file(args: argparse.Namespace) -> None:
+    """If --report-file is given and --report is not, read report text from the file."""
+    if getattr(args, "report", None):
+        return
+    report_file = getattr(args, "report_file", None)
+    if not report_file:
+        return
+    path = Path(report_file)
+    if not path.is_file():
+        print(colorize(f"  --report-file not found: {report_file}", "red"))
+        raise SystemExit(1)
+    try:
+        args.report = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(colorize(f"  Cannot read --report-file: {exc}", "red"))
+        raise SystemExit(1) from exc
+
+
 def run_triage_workflow(
     args: argparse.Namespace,
     *,
@@ -133,6 +152,7 @@ def run_triage_workflow(
     require_issue_inventory_fn: Callable[[dict], bool],
 ) -> None:
     """Route `plan triage` args through one orchestration seam."""
+    _resolve_report_file(args)
     runtime = services.command_runtime(args)
     state = runtime.state
     if not require_issue_inventory_fn(state):

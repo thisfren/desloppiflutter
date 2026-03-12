@@ -345,10 +345,15 @@ def _clean_ledger_token(raw: str) -> str:
 def _extract_ledger_entry(line: str) -> tuple[str, str | None, str | None]:
     """Parse a ledger line into (token, decision, target).
 
-    Always extracts the token (issue key) when a ``->`` is present.
-    Decision and target are None when the right-hand side doesn't match
-    the ``decision "target"`` pattern (e.g. ``-> TODO``).
-    Returns ``("", None, None)`` when the line has no ``->``.
+    Supported formats:
+    - ``- token -> decision "target"``  (canonical)
+    - ``- token -> decision target``    (unquoted)
+    - ``- token -> ...``                (bare arrow)
+    - ``- token: decision target``      (colon-separated)
+    - ``- token, decision, target``     (comma-separated)
+    - ``- token``                       (bare slug/hash on a list line)
+
+    Returns ``("", None, None)`` when nothing is parseable.
     """
     # Try full structured form: - token -> decision "target"
     match = re.match(r"-\s*(.+?)\s*->\s*(\w+)\s+[\"']([^\"']+)[\"']", line)
@@ -368,6 +373,25 @@ def _extract_ledger_entry(line: str) -> tuple[str, str | None, str | None]:
     if match:
         token = _clean_ledger_token(match.group(1))
         return token, None, None
+
+    # Colon-separated: - token: decision target
+    match = re.match(r"-\s*(.+?)\s*:\s*(\w+)\s+[\"']?([^\"']+?)[\"']?\s*$", line)
+    if match:
+        token = _clean_ledger_token(match.group(1))
+        return token, match.group(2).strip().lower(), match.group(3).strip()
+
+    # Comma-separated: - token, decision, target
+    match = re.match(r"-\s*([^,]+),\s*(\w+),\s*[\"']?([^\"',]+?)[\"']?\s*$", line)
+    if match:
+        token = _clean_ledger_token(match.group(1))
+        return token, match.group(2).strip().lower(), match.group(3).strip()
+
+    # Bare slug/hash on a list line: - token
+    match = re.match(r"-\s+(\S+)\s*$", line)
+    if match:
+        token = _clean_ledger_token(match.group(1))
+        if token:
+            return token, None, None
 
     return "", None, None
 
@@ -393,6 +417,16 @@ def _resolve_token_to_id(
         resolved = short_hex_map.get(hex_token)
         if resolved:
             return resolved
+    # Slug-prefix match: token might be the detector_slug part of "detector_slug::hash"
+    token_lower = token.lower()
+    matches = [vid for vid in valid_ids if vid.startswith(token_lower + "::")]
+    if len(matches) == 1:
+        return matches[0]
+    # Substring match: token appears as a component of exactly one issue ID
+    if len(token) >= 6:
+        matches = [vid for vid in valid_ids if token_lower in vid.lower()]
+        if len(matches) == 1:
+            return matches[0]
     return None
 
 
@@ -521,11 +555,13 @@ def _analyze_reflect_issue_accounting(
     for issue_id in valid_ids:
         if issue_id in report:
             cited.add(issue_id)
-    short_hits = Counter(
-        short_hex_map[token]
-        for token in re.findall(r"[0-9a-f]{8,}", report)
-        if token in short_hex_map
-    )
+    # Merge hex-suffix matches into cited (previously only used for duplicates)
+    short_hits: Counter[str] = Counter()
+    for token in re.findall(r"[0-9a-f]{8,}", report):
+        resolved = short_hex_map.get(token)
+        if resolved:
+            cited.add(resolved)
+            short_hits[resolved] += 1
     duplicates = sorted(
         issue_id for issue_id, count in short_hits.items() if count > 1
     )
@@ -560,6 +596,11 @@ def _validate_reflect_issue_accounting(
         )
         print(colorize(f"    Duplicated: {duplicate_short}", "yellow"))
     print(colorize("  Fix the reflect blueprint before running organize.", "dim"))
+    if missing:
+        print(colorize("  Expected format — include a ## Coverage Ledger section:", "dim"))
+        print(colorize('    - <hash> -> cluster "cluster-name"', "dim"))
+        print(colorize('    - <hash> -> skip "reason"', "dim"))
+        print(colorize("  Also accepted: bare hashes, colon-separated, comma-separated.", "dim"))
     return False, cited, missing, duplicates
 
 

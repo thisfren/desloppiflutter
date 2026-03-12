@@ -5,9 +5,22 @@ from __future__ import annotations
 from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan_triage import TRIAGE_CMD_ORGANIZE
 
-from .enrich_checks import _underspecified_steps
+from .enrich_checks import _underspecified_steps as _underspecified_steps_impl
 from ..helpers import manual_clusters_with_issues
 from ..stages.helpers import unenriched_clusters
+
+# Cache _underspecified_steps result within a single completion flow to avoid
+# recomputing it 2-3 times for the same plan dict.
+_underspec_cache: dict[int, list[tuple[str, int, int]]] = {}
+
+
+def _underspecified_steps_cached(plan: dict) -> list[tuple[str, int, int]]:
+    """Return underspecified steps, caching by plan object identity."""
+    key = id(plan)
+    if key not in _underspec_cache:
+        _underspec_cache.clear()  # only keep one entry
+        _underspec_cache[key] = _underspecified_steps_impl(plan)
+    return _underspec_cache[key]
 
 
 _COMPLETE_AUTO_CONFIRM_STAGE_CONFIG = {
@@ -81,7 +94,7 @@ def _require_enrich_stage_for_complete(
     if missing.stage_name != "enrich":
         return _require_organize_stage_for_complete(plan=plan, meta=meta, stages=stages)
 
-    underspec = _underspecified_steps(plan)
+    underspec = _underspecified_steps_cached(plan)
     if underspec:
         print(colorize("  Cannot complete: enrich stage not done.", "red"))
         print(colorize(f"  {len(underspec)} cluster(s) have underspecified steps (missing detail or issue_refs):", "yellow"))
@@ -106,7 +119,7 @@ def _auto_confirm_enrich_for_complete(
     if "enrich" not in stages:
         return False
 
-    underspec = _underspecified_steps(plan)
+    underspec = _underspecified_steps_cached(plan)
     if underspec:
         total_bare = sum(n for _, n, _ in underspec)
         print(colorize(f"  Cannot auto-confirm enrich: {total_bare} step(s) still lack detail or issue_refs.", "red"))

@@ -18,7 +18,7 @@ from ..validation.enrich_checks import (
     _steps_without_effort,
     _underspecified_steps,
 )
-from ..helpers import has_triage_in_queue, open_review_ids_from_state, print_cascade_clear_feedback
+from ..helpers import active_triage_issue_ids, has_triage_in_queue, open_review_ids_from_state, print_cascade_clear_feedback
 from ..services import TriageServices, default_triage_services
 from .enrich import ColorizeFn
 
@@ -55,6 +55,7 @@ def _sense_check_report(
 
 def _sense_check_quality_problems(
     plan: dict,
+    state: dict,
     *,
     deps: SenseCheckStageDeps,
 ) -> list[str]:
@@ -63,15 +64,17 @@ def _sense_check_quality_problems(
         from desloppify.base.discovery.paths import get_project_root
 
     repo_root = get_project_root()
+    triage_ids = active_triage_issue_ids(plan, state) or None
     quality_report = evaluate_enrich_quality(
         plan,
         repo_root,
         phase_label="sense-check",
-        bad_paths_severity="failure",
+        bad_paths_severity="warning",
         missing_effort_severity="failure",
         include_missing_issue_refs=True,
         include_vague_detail=True,
         stale_issue_refs_severity=None,
+        triage_issue_ids=triage_ids,
     )
     return [issue.message for issue in quality_report.failures]
 
@@ -173,7 +176,7 @@ def run_stage_sense_check(
         print(resolved_deps.colorize("  Run: desloppify plan triage --confirm enrich", "dim"))
         return
 
-    problems = _sense_check_quality_problems(plan, deps=resolved_deps)
+    problems = _sense_check_quality_problems(plan, state, deps=resolved_deps)
     if problems:
         _print_sense_check_problems(problems, colorize_fn=resolved_deps.colorize)
         return

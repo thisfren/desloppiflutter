@@ -9,9 +9,19 @@ from desloppify.base.output.terminal import colorize
 
 from ..helpers import cluster_issue_ids
 
-_PATH_RE = re.compile(r"(?:[\w./-]+/)?(?:src|supabase)/[\w./-]+\.\w+")
+_PATH_RE = re.compile(r"(?:[\w./-]+/)?(?:src|supabase)/[\w./-]+\.\w+(?::\d+(?:[-:]\d+)?)?")
+_LINE_SUFFIX_RE = re.compile(r":\d+(?:[-:]\d+)?$")
+_CREATION_CONTEXT_RE = re.compile(
+    r"(?:create|move\s.*?\s(?:into|to)|extract\s.*?\sto|rename\s.*?\sto|new\sfile)",
+    re.IGNORECASE,
+)
 _EXT_SWAPS = {".ts": ".tsx", ".tsx": ".ts", ".js": ".jsx", ".jsx": ".js"}
 _VALID_EFFORTS = {"trivial", "small", "medium", "large"}
+
+
+def _strip_line_suffix(path_str: str) -> str:
+    """Remove trailing :N, :N-M, :N:M line-number suffixes from a path."""
+    return _LINE_SUFFIX_RE.sub("", path_str)
 
 
 def _manual_clusters_with_issues(plan: dict):
@@ -40,7 +50,8 @@ def _detail_paths(detail: str) -> list[str]:
 
 def _path_exists_or_alt_exists(repo_root: Path, path_str: str) -> bool:
     """Return whether the referenced path or a ts/js sibling exists."""
-    path = repo_root / path_str
+    cleaned = _strip_line_suffix(path_str)
+    path = repo_root / cleaned
     if path.exists():
         return True
     alt_ext = _EXT_SWAPS.get(path.suffix)
@@ -88,6 +99,15 @@ def _underspecified_steps(plan: dict) -> list[tuple[str, int, int]]:
     return results
 
 
+def _has_creation_context(detail: str, path_str: str) -> bool:
+    """Return True if the path appears after a creation verb (file doesn't exist yet)."""
+    idx = detail.find(path_str)
+    if idx < 0:
+        return False
+    prefix = detail[max(0, idx - 80) : idx]
+    return bool(_CREATION_CONTEXT_RE.search(prefix))
+
+
 def _steps_with_bad_paths(plan: dict, repo_root: Path) -> list[tuple[str, int, list[str]]]:
     """Return steps referencing file paths that don't exist on disk."""
     results: list[tuple[str, int, list[str]]] = []
@@ -99,7 +119,8 @@ def _steps_with_bad_paths(plan: dict, repo_root: Path) -> list[tuple[str, int, l
             bad = [
                 path_str
                 for path_str in _detail_paths(detail)
-                if not _path_exists_or_alt_exists(repo_root, path_str)
+                if not _has_creation_context(detail, path_str)
+                and not _path_exists_or_alt_exists(repo_root, path_str)
             ]
             if bad:
                 results.append((name, i + 1, bad))
@@ -250,11 +271,13 @@ __all__ = [
     "_clusters_with_directory_scatter",
     "_clusters_with_high_step_ratio",
     "_enrich_report_or_error",
+    "_has_creation_context",
     "_require_organize_stage_for_enrich",
     "_steps_missing_issue_refs",
     "_steps_referencing_skipped_issues",
     "_steps_with_bad_paths",
     "_steps_with_vague_detail",
     "_steps_without_effort",
+    "_strip_line_suffix",
     "_underspecified_steps",
 ]
