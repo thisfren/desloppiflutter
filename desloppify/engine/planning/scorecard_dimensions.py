@@ -35,7 +35,7 @@ def _lang_from_capabilities(state: dict) -> str | None:
 
 
 def _lang_from_issues(state: dict) -> str | None:
-    issues = state.get("issues")
+    issues = state.get("work_items")
     if not isinstance(issues, dict):
         return None
     counts: dict[str, int] = {}

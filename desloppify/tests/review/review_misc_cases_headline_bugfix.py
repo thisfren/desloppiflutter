@@ -9,7 +9,7 @@ class TestHeadlineBugFix:
     def test_headline_no_typeerror_when_headline_none_with_review_suffix(self):
         """Regression: None + review_suffix shouldn't TypeError."""
         # Force: no security prefix, headline_inner returns None, review_suffix non-empty
-        # stagnation + review issues + conditions that make headline_inner return None
+        # stagnation + review work items + conditions that make headline_inner return None
         result = compute_headline(
             "stagnation",
             {},
@@ -41,5 +41,5 @@ class TestHeadlineBugFix:
             open_by_detector={"review": 3},
         )
         if result is not None:
-            assert "review issue" in result.lower()
+            assert "review work item" in result.lower()
             assert "3" in result

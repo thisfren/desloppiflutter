@@ -115,7 +115,7 @@ def print_scan_completeness(state: dict) -> None:
 
 def print_open_scope_breakdown(state: dict) -> None:
     """Print open counts with explicit in-scope/out-of-scope semantics."""
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     if not isinstance(issues, dict):
         return
 

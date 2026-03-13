@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-STAGES: tuple[str, ...] = ("observe", "reflect", "organize", "enrich", "sense-check")
+STAGES: tuple[str, ...] = (
+    "observe",
+    "reflect",
+    "organize",
+    "enrich",
+    "sense-check",
+)
 
 
 def parse_only_stages(raw: str | None) -> list[str]:

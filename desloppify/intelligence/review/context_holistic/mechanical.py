@@ -53,7 +53,7 @@ def gather_mechanical_evidence(
     allowed_files: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     """Aggregate open issues into evidence clusters for holistic review."""
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     if not issues:
         return {}
     allowed_scope = _normalize_allowed_files(allowed_files)

@@ -91,7 +91,7 @@ def render_workflow_stage(item: dict, *, colorize_fn, workflow_stage_name_fn) ->
     print(f"  {colorize_fn(item.get('summary', ''), 'yellow')}")
     total = detail.get("total_review_issues", 0)
     if total:
-        print(colorize_fn(f"  {total} review issues to analyze", "dim"))
+        print(colorize_fn(f"  {total} review work items to analyze", "dim"))
     if blocked:
         _print_blocked_stage_actions(
             blocked_by=item.get("blocked_by", []),

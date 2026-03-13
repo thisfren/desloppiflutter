@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from desloppify.base.discovery.paths import get_area
-from desloppify.engine.hook_registry import register_lang_hooks
 from desloppify.languages._framework.base.phase_builders import (
     detector_phase_security,
     detector_phase_signature,
@@ -17,6 +16,7 @@ from desloppify.languages._framework.base.types import (
 )
 from desloppify.languages._framework.generic_parts.tool_factories import make_tool_phase
 from desloppify.languages._framework.registry.registration import register_full_plugin
+from desloppify.languages._framework.registry.state import register_lang_hooks
 from desloppify.languages._framework.treesitter.phases import all_treesitter_phases
 from desloppify.languages.cxx import test_coverage as cxx_test_coverage_hooks
 from desloppify.languages.cxx._helpers import build_cxx_dep_graph
@@ -49,6 +49,11 @@ class CxxConfig(LangConfig):
         return detect_cxx_security(files, zone_map)
 
     def __init__(self):
+        tree_sitter_phases = [
+            phase for phase in all_treesitter_phases("cpp")
+            if phase.label != "Unused imports"
+        ]
+
         super().__init__(
             name="cxx",
             extensions=CXX_EXTENSIONS,
@@ -61,7 +66,7 @@ class CxxConfig(LangConfig):
                 DetectorPhase("Structural analysis", phase_structural),
                 DetectorPhase("Coupling + cycles + orphaned", phase_coupling),
                 DetectorPhase("cppcheck", phase_cppcheck_issue),
-                *all_treesitter_phases("cpp"),
+                *tree_sitter_phases,
                 detector_phase_signature(),
                 detector_phase_test_coverage(),
                 detector_phase_security(),

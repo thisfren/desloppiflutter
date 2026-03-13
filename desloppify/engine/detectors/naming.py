@@ -1,5 +1,7 @@
 """Naming consistency analysis: flag directories with mixed filename conventions."""
 
+from __future__ import annotations
+
 from collections import defaultdict
 from pathlib import Path
 
@@ -84,3 +86,6 @@ def detect_naming_inconsistencies(
             )
 
     return sorted(entries, key=lambda e: -e["minority_count"]), len(dir_files)
+
+
+__all__ = ["detect_naming_inconsistencies"]

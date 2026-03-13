@@ -10,6 +10,7 @@ from typing import Any
 
 from desloppify.engine.plan_triage import TRIAGE_STAGE_SPECS
 from desloppify.engine._scoring.subjective.core import DISPLAY_NAMES
+from desloppify.engine._state.issue_semantics import is_triage_finding
 from desloppify.engine._state.schema import StateModel
 from desloppify.engine._work_queue.helpers import (
     detail_dict,
@@ -27,6 +28,16 @@ from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.engine._plan.constants import (
     confirmed_triage_stage_names,
     recorded_unconfirmed_triage_stage_names,
+)
+from desloppify.engine._plan.triage.snapshot import build_triage_snapshot
+from desloppify.engine._plan.refresh_lifecycle import (
+    LIFECYCLE_PHASE_REVIEW_INITIAL,
+    LIFECYCLE_PHASE_TRIAGE,
+    LIFECYCLE_PHASE_TRIAGE_POSTFLIGHT,
+    LIFECYCLE_PHASE_WORKFLOW,
+    LIFECYCLE_PHASE_WORKFLOW_POSTFLIGHT,
+    current_lifecycle_phase,
+    subjective_review_completed_for_scan,
 )
 from desloppify.engine.plan_triage import (
     TRIAGE_IDS,
@@ -123,14 +134,24 @@ def build_triage_stage_items(plan: dict, state: dict) -> list[WorkQueueItem]:
         if sid in present_ids
     }
     present_names.update(recorded_unconfirmed)
+    triage_snapshot = build_triage_snapshot(plan, state)
+    recovery_needed = (
+        not present_names
+        and bool(triage_snapshot.live_open_ids)
+        and triage_snapshot.triage_has_run
+        and triage_snapshot.is_triage_stale
+    )
+    if recovery_needed:
+        present_names = {name for name, _sid in TRIAGE_STAGE_SPECS}
+        confirmed = set()
     if not present_names:
         return []
 
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     open_review_count = sum(
         1 for f in issues.values()
         if f.get("status") == "open"
-        and f.get("detector") in ("review", "concerns")
+        and is_triage_finding(f)
     )
 
     label_map = dict(TRIAGE_STAGE_LABELS)
@@ -177,7 +198,11 @@ def build_triage_stage_items(plan: dict, state: dict) -> list[WorkQueueItem]:
 
 
 def build_subjective_items(
-    state: dict, issues: dict, *, threshold: float = 100.0
+    state: dict,
+    issues: dict,
+    *,
+    threshold: float = 100.0,
+    plan: dict | None = None,
 ) -> list[WorkQueueItem]:
     """Create synthetic subjective work items."""
     dim_scores = state.get("dimension_scores", {}) or {}
@@ -200,12 +225,57 @@ def build_subjective_items(
     for issue in issues.values():
         if issue.get("status") != "open":
             continue
-        if issue.get("detector") == "review":
+        if is_triage_finding(issue):
             dim_key = str(detail_dict(issue).get("dimension", "")).strip().lower()
             if dim_key:
                 review_open_by_dim[dim_key] = review_open_by_dim.get(dim_key, 0) + 1
 
     items: list[WorkQueueItem] = []
+    latest_trusted_audit_ts = ""
+    for raw_entry in reversed(state.get("assessment_import_audit", []) or []):
+        if not isinstance(raw_entry, dict):
+            continue
+        if raw_entry.get("mode") not in {"trusted_internal", "attested_external"}:
+            continue
+        latest_trusted_audit_ts = str(raw_entry.get("timestamp", "")).strip()
+        if latest_trusted_audit_ts:
+            break
+    current_phase = current_lifecycle_phase(plan) if isinstance(plan, dict) else None
+    current_scan_count = int(state.get("scan_count", 0) or 0)
+    postflight_scan_completed_this_scan = False
+    if isinstance(plan, dict):
+        refresh_state = plan.get("refresh_state")
+        if isinstance(refresh_state, dict):
+            postflight_scan_completed_this_scan = (
+                refresh_state.get("postflight_scan_completed_at_scan_count")
+                == current_scan_count
+            )
+    review_completed_this_scan = (
+        subjective_review_completed_for_scan(plan, scan_count=current_scan_count)
+        if isinstance(plan, dict)
+        else False
+    )
+
+    def _suppressed_same_cycle_refresh(dimension_key: str, *, stale: bool) -> bool:
+        if not stale or latest_trusted_audit_ts == "":
+            return False
+        if current_phase not in {
+            LIFECYCLE_PHASE_WORKFLOW, LIFECYCLE_PHASE_WORKFLOW_POSTFLIGHT,
+            LIFECYCLE_PHASE_TRIAGE, LIFECYCLE_PHASE_TRIAGE_POSTFLIGHT,
+        }:
+            return False
+        assessments = state.get("subjective_assessments", {}) or {}
+        payload = assessments.get(dimension_key)
+        if not isinstance(payload, dict):
+            return False
+        refresh_reason = str(payload.get("refresh_reason", "")).strip()
+        if not refresh_reason.startswith("review_issue_"):
+            return False
+        assessed_at = str(payload.get("assessed_at", "")).strip()
+        if assessed_at == "":
+            return False
+        return assessed_at >= latest_trusted_audit_ts
+
     def _prepare_command(
         cli_keys: list[str],
         *,
@@ -223,9 +293,6 @@ def build_subjective_items(
         if not name:
             continue
         strict_val = float(entry.get("strict", entry.get("score", 100.0)))
-        if strict_val >= threshold:
-            continue
-
         dim_key = _canonical_subjective_dimension_key(name)
         aliases = set(_subjective_dimension_aliases(name))
         cli_keys = [
@@ -241,14 +308,34 @@ def build_subjective_items(
             or (strict_val <= 0.0 and int(entry.get("failing", 0)) == 0)
         )
         is_stale = bool(entry.get("stale"))
+        is_below_target = strict_val < threshold
+        needs_review = (
+            is_unassessed
+            or is_stale
+            or (
+                is_below_target
+                and postflight_scan_completed_this_scan
+                and current_phase != LIFECYCLE_PHASE_REVIEW_INITIAL
+                and not review_completed_this_scan
+            )
+        )
+        if not needs_review:
+            continue
+        if _suppressed_same_cycle_refresh(dim_key, stale=is_stale):
+            continue
+        if not is_below_target and not is_unassessed:
+            continue
         # If review issues already exist for this dimension, triage/fix them
         # before suggesting another review refresh pass.
         if open_review > 0:
             primary_command = "desloppify show review --status open"
         else:
             primary_command = _prepare_command(cli_keys)
-        stale_tag = " [stale — re-review]" if is_stale else ""
-        summary = f"Subjective dimension below target: {name} ({strict_val:.1f}%){stale_tag}"
+        reason_tags = ["below target"]
+        if is_stale:
+            reason_tags.append("stale")
+        reasons = ", ".join(reason_tags)
+        summary = f"Subjective review needed: {name} ({strict_val:.1f}%) [{reasons}]"
         item: WorkQueueItem = {
             "id": f"subjective::{slugify(dim_key)}",
             "detector": "subjective_assessment",

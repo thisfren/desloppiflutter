@@ -45,7 +45,7 @@ def find_lowest_dimension(
 
 def open_review_issue_counts(state: dict) -> dict[str, int]:
     """Count open review issues grouped by subjective dimension key."""
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     if not isinstance(issues, dict):
         return {}
 

@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from desloppify.base.output.terminal import colorize
+from desloppify.engine._plan.constants import is_synthetic_id
+from desloppify.engine._state.issue_semantics import is_triage_finding
 from desloppify.engine.plan_triage import TRIAGE_IDS
 
-from ..review_coverage import cluster_issue_ids, live_active_triage_issue_ids
+from ..review_coverage import (
+    active_triage_issue_ids,
+    cluster_issue_ids,
+    live_active_triage_issue_ids,
+    manual_clusters_with_issues,
+)
 
 
 def _require_triage_pending(plan: dict, *, action: str) -> bool:
@@ -45,7 +52,63 @@ def _validate_stage_report(
     return cleaned
 
 
-def unenriched_clusters(plan: dict) -> list[tuple[str, list[str]]]:
+def active_triage_issue_scope(
+    plan: dict,
+    state: dict | None = None,
+) -> set[str] | None:
+    """Return the active triage issue scope, or None when no scope is frozen.
+
+    `None` means "do not scope" for legacy/non-triage flows.
+    An empty set means a frozen triage run exists but none of its issues are live.
+    """
+    frozen = active_triage_issue_ids(plan, state)
+    if not frozen:
+        return None
+    if state is None:
+        return frozen
+    return live_active_triage_issue_ids(plan, state)
+
+
+def scoped_manual_clusters_with_issues(
+    plan: dict,
+    state: dict | None = None,
+) -> list[str]:
+    """Return manual clusters relevant to the current triage session."""
+    scope = active_triage_issue_scope(plan, state)
+    clusters = plan.get("clusters", {})
+    names = manual_clusters_with_issues(plan)
+    if scope is None:
+        return names
+    return [
+        name
+        for name in names
+        if set(cluster_issue_ids(clusters.get(name, {}))) & scope
+    ]
+
+
+def triage_scoped_plan(
+    plan: dict,
+    state: dict | None = None,
+) -> dict:
+    """Return a plan view filtered to the current triage session when active."""
+    scope = active_triage_issue_scope(plan, state)
+    if scope is None:
+        return plan
+    allowed = set(scoped_manual_clusters_with_issues(plan, state))
+    return {
+        **plan,
+        "clusters": {
+            name: cluster
+            for name, cluster in plan.get("clusters", {}).items()
+            if name in allowed
+        },
+    }
+
+
+def unenriched_clusters(
+    plan: dict,
+    state: dict | None = None,
+) -> list[tuple[str, list[str]]]:
     """Return clusters with issues that are missing required enrichment.
 
     Requirements:
@@ -55,12 +118,10 @@ def unenriched_clusters(plan: dict) -> list[tuple[str, list[str]]]:
       steps overall (cluster-level plan is sufficient).
     """
     gaps: list[tuple[str, list[str]]] = []
-    for name, cluster in plan.get("clusters", {}).items():
+    clusters = plan.get("clusters", {})
+    for name in scoped_manual_clusters_with_issues(plan, state):
+        cluster = clusters.get(name, {})
         issue_ids = cluster_issue_ids(cluster)
-        if not issue_ids:
-            continue
-        if cluster.get("auto"):
-            continue
         missing: list[str] = []
         if not cluster.get("description"):
             missing.append("description")
@@ -95,9 +156,9 @@ def unclustered_review_issues(plan: dict, state: dict | None = None) -> list[str
 
     if state is not None:
         review_ids = [
-            fid for fid, finding in state.get("issues", {}).items()
+            fid for fid, finding in (state.get("work_items") or state.get("issues", {})).items()
             if finding.get("status") == "open"
-            and finding.get("detector") in ("review", "concerns")
+            and is_triage_finding(finding)
         ]
         frozen_ids = (plan.get("epic_triage_meta", {}) or {}).get("active_triage_issue_ids")
         if isinstance(frozen_ids, list) and frozen_ids:
@@ -106,7 +167,7 @@ def unclustered_review_issues(plan: dict, state: dict | None = None) -> list[str
     else:
         review_ids = [
             fid for fid in plan.get("queue_order", [])
-            if not fid.startswith("triage::") and not fid.startswith("workflow::")
+            if not is_synthetic_id(fid)
             and (fid.startswith("review::") or fid.startswith("concerns::"))
         ]
 
@@ -114,3 +175,17 @@ def unclustered_review_issues(plan: dict, state: dict | None = None) -> list[str
         fid for fid in review_ids
         if fid not in clustered_ids and fid not in skipped_ids
     ]
+
+
+def value_check_targets(plan: dict, state: dict | None = None) -> list[str]:
+    """Return the current execution targets that value-check must judge once each."""
+    targets = list(scoped_manual_clusters_with_issues(plan, state))
+    targets.extend(unclustered_review_issues(plan, state))
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for target in targets:
+        if target in seen:
+            continue
+        seen.add(target)
+        ordered.append(target)
+    return ordered

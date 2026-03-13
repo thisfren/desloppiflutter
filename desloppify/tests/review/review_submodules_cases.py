@@ -130,7 +130,7 @@ class TestGetFileIssues:
         assert get_file_issues(empty_state, "src/foo.ts") == []
 
     def test_finds_matching(self, empty_state):
-        empty_state["issues"] = {
+        empty_state["work_items"] = {
             "f1": {
                 "detector": "smells",
                 "file": "src/foo.ts",

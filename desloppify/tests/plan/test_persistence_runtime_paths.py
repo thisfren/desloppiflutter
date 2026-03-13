@@ -32,3 +32,35 @@ def test_plan_persistence_honors_monkeypatched_plan_file(monkeypatch, tmp_path):
 
     assert custom_plan_file.exists()
     assert loaded["queue_order"] == ["review::b.py::issue-2"]
+
+
+def test_resolve_plan_load_status_marks_backup_recovery_degraded(tmp_path, capsys):
+    plan_file = tmp_path / "plan.json"
+    backup_file = tmp_path / "plan.json.bak"
+    plan_file.write_text("{not json", encoding="utf-8")
+    backup_file.write_text(
+        '{"version": 8, "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00", "queue_order": ["review::a.py::issue-1"], "deferred": [], "skipped": {}, "active_cluster": null, "overrides": {}, "clusters": {}, "superseded": {}, "promoted_ids": [], "plan_start_scores": {}, "refresh_state": {}, "execution_log": [], "epic_triage_meta": {}, "commit_log": [], "uncommitted_issues": [], "commit_tracking_branch": null}\n',
+        encoding="utf-8",
+    )
+
+    status = persistence_mod.resolve_plan_load_status(plan_file)
+
+    assert status.degraded is True
+    assert status.recovery == "backup"
+    assert status.error_kind == "JSONDecodeError"
+    assert status.plan is not None
+    assert status.plan["queue_order"] == ["review::a.py::issue-1"]
+    assert "recovered from backup" in capsys.readouterr().err
+
+
+def test_resolve_plan_load_status_marks_fresh_start_when_recovery_fails(tmp_path, capsys):
+    plan_file = tmp_path / "plan.json"
+    plan_file.write_text("{not json", encoding="utf-8")
+
+    status = persistence_mod.resolve_plan_load_status(plan_file)
+
+    assert status.degraded is True
+    assert status.recovery == "fresh_start"
+    assert status.error_kind == "JSONDecodeError"
+    assert status.plan == empty_plan()
+    assert "starting fresh" in capsys.readouterr().err.lower()

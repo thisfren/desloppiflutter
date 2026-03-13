@@ -5,6 +5,8 @@ The algorithms work on any dep graph — the boundary definitions (what prefixes
 constitute "shared" vs "tools") are provided by the caller.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -223,3 +225,11 @@ def detect_cross_tool_imports(
         violating_edges=violating_edges,
         eligible_edges=eligible_edges,
     )
+
+
+__all__ = [
+    "CouplingEdgeCounts",
+    "detect_boundary_candidates",
+    "detect_coupling_violations",
+    "detect_cross_tool_imports",
+]

@@ -10,16 +10,41 @@ from desloppify.state_io import utc_now
 from ..display.dashboard import print_reflect_result
 from ..stage_queue import cascade_clear_dispositions, cascade_clear_later_confirmations, has_triage_in_queue
 from ..services import TriageServices, default_triage_services
-from ..validation.core import (
+from ..validation.reflect_accounting import (
     ReflectDisposition,
-    _validate_recurring_dimension_mentions,
     parse_reflect_dispositions,
+    validate_reflect_accounting,
 )
-from ..validation.reflect_accounting import validate_reflect_accounting
 from ..validation.stage_policy import auto_confirm_observe_if_attested
 from .flow_helpers import validate_stage_report_length
 from .records import resolve_reusable_report
 from .rendering import _print_reflect_report_requirement
+
+
+def _validate_recurring_dimension_mentions(
+    *,
+    report: str,
+    recurring_dims: list[str],
+    recurring: dict[str, dict[str, list[str]]],
+) -> bool:
+    if not recurring_dims:
+        return True
+    report_lower = report.lower()
+    mentioned = [dim for dim in recurring_dims if dim.lower() in report_lower]
+    if mentioned:
+        return True
+    print(colorize("  Recurring patterns detected but not addressed in report:", "red"))
+    for dim in recurring_dims:
+        info = recurring[dim]
+        print(
+            colorize(
+                f"    {dim}: {len(info['resolved'])} resolved, "
+                f"{len(info['open'])} still open — potential loop",
+                "yellow",
+            )
+        )
+    print(colorize("  Your report must mention at least one recurring dimension name.", "dim"))
+    return False
 
 
 def _validate_reflect_submission(
@@ -46,7 +71,8 @@ def _validate_reflect_submission(
     ):
         return None
 
-    issue_count = len(triage_input.open_issues)
+    review_issues = getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {}))
+    issue_count = len(review_issues)
     if not validate_stage_report_length(
         report=report,
         issue_count=issue_count,
@@ -55,7 +81,7 @@ def _validate_reflect_submission(
         return None
 
     recurring = services.detect_recurring_patterns(
-        triage_input.open_issues,
+        review_issues,
         triage_input.resolved_issues,
     )
     recurring_dims = sorted(recurring.keys())
@@ -66,7 +92,7 @@ def _validate_reflect_submission(
     ):
         return None
 
-    valid_ids = set(triage_input.open_issues.keys())
+    valid_ids = set(review_issues.keys())
 
     # Exclude issues already auto-skipped by observe from reflect accounting
     meta = plan.get("epic_triage_meta", {})

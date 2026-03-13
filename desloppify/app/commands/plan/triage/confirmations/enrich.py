@@ -14,6 +14,8 @@ from .shared import (
     finalize_stage_confirmation,
 )
 from ..services import TriageServices, default_triage_services
+from ..stages.helpers import scoped_manual_clusters_with_issues
+from ..review_coverage import active_triage_issue_ids
 from ..validation.enrich_quality import (
     EnrichQualityIssue as _ConfirmationCheckIssue,
     EnrichQualityReport as _ConfirmationCheckReport,
@@ -41,6 +43,7 @@ def _collect_enrich_level_confirmation_checks(
     plan: dict,
     *,
     include_stale_issue_ref_warning: bool,
+    triage_issue_ids: set[str] | None = None,
 ) -> _ConfirmationCheckReport:
     from desloppify.base.discovery.paths import get_project_root
 
@@ -53,6 +56,7 @@ def _collect_enrich_level_confirmation_checks(
         include_missing_issue_refs=True,
         include_vague_detail=True,
         stale_issue_refs_severity="warning" if include_stale_issue_ref_warning else None,
+        triage_issue_ids=triage_issue_ids,
     )
 
 
@@ -170,10 +174,12 @@ def confirm_enrich(
     resolved_services = services or default_triage_services()
     if not ensure_stage_is_confirmable(stages, stage="enrich"):
         return
+    state = resolved_services.command_runtime(args).state
 
     checks = _collect_enrich_level_confirmation_checks(
         plan,
         include_stale_issue_ref_warning=True,
+        triage_issue_ids=active_triage_issue_ids(plan, state) or None,
     )
 
     print(colorize("  Stage: ENRICH — Make steps executor-ready (detail, refs)", "bold"))
@@ -184,7 +190,7 @@ def confirm_enrich(
 
     _print_stale_ref_warning(checks.warning("stale_issue_refs"))
 
-    enrich_clusters = [n for n in plan.get("clusters", {}) if not plan["clusters"][n].get("auto")]
+    enrich_clusters = scoped_manual_clusters_with_issues(plan, state)
 
     if not finalize_stage_confirmation(
         plan=plan,
@@ -221,10 +227,12 @@ def confirm_sense_check(
     resolved_services = services or default_triage_services()
     if not ensure_stage_is_confirmable(stages, stage="sense-check"):
         return
+    state = resolved_services.command_runtime(args).state
 
     checks = _collect_enrich_level_confirmation_checks(
         plan,
         include_stale_issue_ref_warning=False,
+        triage_issue_ids=active_triage_issue_ids(plan, state) or None,
     )
 
     print(colorize("  Stage: SENSE-CHECK — Verify accuracy & cross-cluster deps", "bold"))
@@ -235,7 +243,7 @@ def confirm_sense_check(
 
     print(colorize("  All enrich-level checks pass.", "green"))
 
-    sense_check_clusters = [n for n in plan.get("clusters", {}) if not plan["clusters"][n].get("auto")]
+    sense_check_clusters = scoped_manual_clusters_with_issues(plan, state)
 
     if not finalize_stage_confirmation(
         plan=plan,

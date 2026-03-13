@@ -526,7 +526,7 @@ class TestPrepareHolisticReview:
         lang = _mock_lang([in_scope_file])
         lang.name = "python"
         state = empty_state()
-        state["issues"] = {
+        state["work_items"] = {
             "in_scope_structural": {
                 "id": "in_scope_structural",
                 "detector": "structural",
@@ -616,7 +616,7 @@ class TestImportHolisticIssues:
         diff = _call_import_holistic_issues(issues_data, state, "python")
 
         assert diff["new"] == 1
-        issues = list(state["issues"].values())
+        issues = list(state["work_items"].values())
         assert len(issues) == 1
         f = issues[0]
         assert f["file"] == "."
@@ -639,7 +639,7 @@ class TestImportHolisticIssues:
         diff = _call_import_holistic_issues(issues_data, state, "python")
 
         assert diff["new"] == 0
-        assert len(state["issues"]) == 0
+        assert len(state["work_items"]) == 0
 
     def test_missing_fields_rejected(self):
         state = empty_state()
@@ -677,7 +677,7 @@ class TestImportHolisticIssues:
         diff = _call_import_holistic_issues(issues_data, state, "python")
 
         assert diff["new"] == 2
-        assert len(state["issues"]) == 2
+        assert len(state["work_items"]) == 2
 
     def test_holistic_cache_updated(self):
         state = empty_state()
@@ -734,7 +734,7 @@ class TestImportHolisticIssues:
         state = empty_state()
 
         coverage_id = "subjective_review::.::high_level_elegance"
-        state["issues"][coverage_id] = {
+        state["work_items"][coverage_id] = {
             "id": coverage_id,
             "detector": "subjective_review",
             "file": ".",
@@ -763,7 +763,7 @@ class TestImportHolisticIssues:
             diff = _call_import_holistic_issues(payload, state, "python", project_root=tmp_path)
 
         assert diff["auto_resolved"] >= 1
-        assert state["issues"][coverage_id]["status"] == "fixed"
+        assert state["work_items"][coverage_id]["status"] == "fixed"
 
     def test_holistic_potential_added(self):
         state = empty_state()
@@ -800,7 +800,7 @@ class TestImportHolisticIssues:
 
         _call_import_holistic_issues(issues_data, state, "python")
 
-        fid = list(state["issues"].keys())[0]
+        fid = list(state["work_items"].keys())[0]
         assert "holistic" in fid
 
     def test_positive_observation_skipped(self):
@@ -841,7 +841,7 @@ class TestImportHolisticIssues:
         # Only the actual defect should be imported
         assert diff["new"] == 1
         assert diff.get("skipped", 0) == 2
-        issues = list(state["issues"].values())
+        issues = list(state["work_items"].values())
         assert len(issues) == 1
         assert "vague_name" in issues[0]["id"]
 

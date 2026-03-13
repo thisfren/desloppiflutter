@@ -292,7 +292,11 @@ def save_state(
     state_path = path or _default_state_file()
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
-    content = json.dumps(state, indent=2, default=json_default) + "\n"
+    serialized_state = {
+        key: value for key, value in state.items() if key != "issues"
+    }
+    serialized_state["work_items"] = dict((state.get("work_items") or state.get("issues", {})))
+    content = json.dumps(serialized_state, indent=2, default=json_default) + "\n"
 
     if state_path.exists():
         backup = state_path.with_suffix(".json.bak")
@@ -327,7 +331,7 @@ def state_lock(
     Usage::
 
         with state_lock(state_file) as state:
-            state["issues"]["foo"] = "fixed"
+            state["work_items"]["foo"] = "fixed"
         # state is saved automatically on clean exit
     """
     state_path = path or _default_state_file()

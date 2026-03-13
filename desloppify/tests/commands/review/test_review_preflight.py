@@ -147,7 +147,7 @@ def test_blocked_when_open_objective_items(capsys):
 def test_subjective_review_backlog_blocks_preflight(capsys):
     """Open review findings in scored dimensions block rerun preflight."""
     state = _state_with_prior_review()
-    state["issues"] = {
+    state["work_items"] = {
         "review::naming": _review_issue(
             issue_id="review::naming",
             dimension="naming_quality",
@@ -168,7 +168,7 @@ def test_subjective_review_backlog_blocks_preflight(capsys):
 def test_subjective_concerns_backlog_blocks_preflight(capsys):
     """Open concerns findings in scored dimensions block rerun preflight."""
     state = _state_with_prior_review()
-    state["issues"] = {
+    state["work_items"] = {
         "concerns::naming": _concern_issue(
             issue_id="concerns::naming",
             dimension="naming_quality",
@@ -189,7 +189,7 @@ def test_subjective_concerns_backlog_blocks_preflight(capsys):
 def test_subjective_review_backlog_is_dimension_filtered():
     """Rerun targeting one scored dimension ignores review backlog in others."""
     state = _state_with_prior_review()
-    state["issues"] = {
+    state["work_items"] = {
         "review::logic": _review_issue(
             issue_id="review::logic",
             dimension="logic_clarity",

@@ -12,16 +12,20 @@ from desloppify.languages.rust._fixers import (
     fix_readme_doctests,
 )
 from desloppify.languages.rust.phases import phase_signature
-from desloppify.languages.rust.detectors.custom import (
-    detect_async_locking,
-    detect_doctest_hygiene,
-    detect_drop_safety,
+from desloppify.languages.rust.detectors.api import (
     detect_error_boundaries,
-    detect_feature_hygiene,
     detect_future_proofing,
     detect_import_hygiene,
     detect_public_api_conventions,
     detect_thread_safety_contracts,
+)
+from desloppify.languages.rust.detectors.cargo_policy import (
+    detect_doctest_hygiene,
+    detect_feature_hygiene,
+)
+from desloppify.languages.rust.detectors.safety import (
+    detect_async_locking,
+    detect_drop_safety,
     detect_unsafe_api_usage,
 )
 

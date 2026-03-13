@@ -1,4 +1,4 @@
-"""Post-scan plan reconciliation — handle issue churn."""
+"""Post-scan reconciliation for stale or disappeared issue references."""
 
 from __future__ import annotations
 
@@ -11,10 +11,6 @@ from desloppify.engine._plan.operations.lifecycle import clear_focus_if_cluster_
 from desloppify.engine._plan.operations.meta import append_log_entry
 from desloppify.engine._plan.operations.skip import resurface_stale_skips
 from desloppify.engine._plan.promoted_ids import prune_promoted_ids
-from desloppify.engine._plan.reconcile_review_import import (
-    ReviewImportSyncResult,
-    sync_plan_after_review_import,
-)
 from desloppify.engine._plan.schema import (
     EPIC_PREFIX,
     PlanModel,
@@ -22,7 +18,7 @@ from desloppify.engine._plan.schema import (
     ensure_plan_defaults,
 )
 from desloppify.engine._plan.skip_policy import skip_kind_state_status
-from desloppify.engine._state.schema import StateModel, utc_now
+from desloppify.engine._state.schema import StateModel, ensure_state_defaults, utc_now
 
 SUPERSEDED_TTL_DAYS = 90
 
@@ -43,7 +39,7 @@ def _find_candidates(
 ) -> list[str]:
     """Find alive issues that could be remaps for a disappeared issue."""
     candidates: list[str] = []
-    for fid, issue in state.get("issues", {}).items():
+    for fid, issue in (state.get("work_items") or state.get("issues", {})).items():
         if issue.get("status") not in _ALIVE_STATUSES:
             continue
         if issue.get("detector") == detector and issue.get("file") == file:
@@ -56,7 +52,7 @@ _ALIVE_STATUSES = frozenset({"open", "deferred", "triaged_out"})
 
 def _is_issue_alive(state: StateModel, issue_id: str) -> bool:
     """Return True if the issue exists and is actionable (open/deferred/triaged_out)."""
-    issue = state.get("issues", {}).get(issue_id)
+    issue = (state.get("work_items") or state.get("issues", {})).get(issue_id)
     if issue is None:
         return False
     return issue.get("status") in _ALIVE_STATUSES
@@ -69,7 +65,7 @@ def _supersede_id(
     now: str,
 ) -> bool:
     """Move a disappeared issue to superseded. Returns True if changed."""
-    issue = state.get("issues", {}).get(issue_id)
+    issue = (state.get("work_items") or state.get("issues", {})).get(issue_id)
     detector = ""
     file = ""
     summary = ""
@@ -160,6 +156,59 @@ def _referenced_plan_issue_ids(plan: PlanModel) -> set[str]:
     }
 
 
+def _prune_existing_superseded_references(
+    plan: PlanModel,
+    *,
+    result: ReconcileResult,
+) -> None:
+    superseded_ids = {
+        fid for fid in plan.get("superseded", {})
+        if isinstance(fid, str) and fid
+    }
+    if not superseded_ids:
+        return
+
+    changes = 0
+    order = plan.get("queue_order", [])
+    kept_order = [fid for fid in order if fid not in superseded_ids]
+    if len(kept_order) != len(order):
+        changes += len(order) - len(kept_order)
+        order[:] = kept_order
+
+    skipped = plan.get("skipped", {})
+    for fid in list(skipped):
+        if fid in superseded_ids:
+            skipped.pop(fid, None)
+            changes += 1
+
+    promoted_before = len(plan.get("promoted_ids", []))
+    prune_promoted_ids(plan, superseded_ids)
+    changes += max(0, promoted_before - len(plan.get("promoted_ids", [])))
+
+    for cluster in plan.get("clusters", {}).values():
+        issue_ids = cluster.get("issue_ids", [])
+        kept_issue_ids = [fid for fid in issue_ids if fid not in superseded_ids]
+        if len(kept_issue_ids) != len(issue_ids):
+            changes += len(issue_ids) - len(kept_issue_ids)
+            cluster["issue_ids"] = kept_issue_ids
+        for step in cluster.get("action_steps", []):
+            if not isinstance(step, dict):
+                continue
+            refs = step.get("issue_refs", [])
+            kept_refs = [fid for fid in refs if fid not in superseded_ids]
+            if len(kept_refs) != len(refs):
+                changes += len(refs) - len(kept_refs)
+                step["issue_refs"] = kept_refs
+
+    for fid in superseded_ids:
+        override = plan.get("overrides", {}).get(fid)
+        if override and override.get("cluster"):
+            override["cluster"] = None
+            changes += 1
+
+    result.changes += changes
+
+
 def _supersede_dead_references(
     plan: PlanModel,
     state: StateModel,
@@ -231,7 +280,7 @@ def _sync_skipped_issue_statuses(plan: PlanModel, state: StateModel) -> None:
     Runs on every reconcile so existing data gets migrated on next scan.
     """
     skipped = plan.get("skipped", {})
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     for fid, entry in skipped.items():
         issue = issues.get(fid)
         if issue is None or issue.get("status") != "open":
@@ -252,10 +301,12 @@ def reconcile_plan_after_scan(
     open, moves them to superseded, and prunes old superseded entries.
     """
     ensure_plan_defaults(plan)
+    ensure_state_defaults(state)
     result = ReconcileResult()
     now = utc_now()
     now_dt = datetime.now(UTC)
 
+    _prune_existing_superseded_references(plan, result=result)
     referenced_ids = _referenced_plan_issue_ids(plan)
 
     # Snapshot non-epic cluster sizes before superseding so we can detect
@@ -291,7 +342,7 @@ def reconcile_plan_after_scan(
         result.resurfaced = resurfaced
         result.changes += len(resurfaced)
         # Reopen resurfaced issues in state (they were deferred)
-        issues = state.get("issues", {})
+        issues = (state.get("work_items") or state.get("issues", {}))
         for fid in resurfaced:
             issue = issues.get(fid)
             if issue and issue.get("status") == "deferred":
@@ -321,7 +372,5 @@ def reconcile_plan_after_scan(
 
 __all__ = [
     "ReconcileResult",
-    "ReviewImportSyncResult",
     "reconcile_plan_after_scan",
-    "sync_plan_after_review_import",
 ]

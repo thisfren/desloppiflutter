@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._clusters_consistency import (
+from desloppify.intelligence.review.context_holistic.clusters.consistency import (
     _build_duplicate_clusters,
     _build_naming_drift,
 )
@@ -46,4 +46,3 @@ def test_build_naming_drift_groups_by_directory_and_counts_outliers() -> None:
     assert drift[0]["minority_count"] == 2
     assert "src/app/FooBar.py" in drift[0]["outliers"]
     assert drift[1]["directory"] == "src/lib/"
-

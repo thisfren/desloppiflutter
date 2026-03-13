@@ -17,6 +17,7 @@ __all__ = [
 ]
 
 from desloppify.base.discovery.file_paths import rel
+from desloppify.engine._state.issue_semantics import ensure_work_item_semantics
 from desloppify.engine._state.schema import (
     Issue,
     StateModel,
@@ -113,12 +114,12 @@ def remove_ignored_issues(state: StateModel, pattern: str) -> int:
     ensure_state_defaults(state)
     matched_ids = [
         issue_id
-        for issue_id, issue in state["issues"].items()
+        for issue_id, issue in state["work_items"].items()
         if is_ignored(issue_id, issue["file"], [pattern])
     ]
     now = utc_now()
     for issue_id in matched_ids:
-        issue = state["issues"][issue_id]
+        issue = state["work_items"][issue_id]
         issue["suppressed"] = True
         issue["suppressed_at"] = now
         issue["suppression_pattern"] = pattern
@@ -159,7 +160,7 @@ def make_issue(
     rfile = rel(file)
     issue_id = f"{detector}::{rfile}::{name}" if name else f"{detector}::{rfile}"
     now = utc_now()
-    return {
+    issue: Issue = {
         "id": issue_id,
         "detector": detector,
         "file": rfile,
@@ -174,6 +175,8 @@ def make_issue(
         "resolved_at": None,
         "reopen_count": 0,
     }
+    ensure_work_item_semantics(issue)
+    return issue
 
 
 _HEX8_RE = re.compile(r'^[0-9a-f]{8}$')

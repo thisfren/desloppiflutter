@@ -169,12 +169,11 @@ class TestCmdReviewPrepare:
         lang = MagicMock()
         lang.name = "typescript"
 
-        # save_state is imported lazily: from ..state import save_state
-        with patch("desloppify.state.save_state", mock_save):
+        with patch("desloppify.app.commands.review.importing.cmd.save_state", mock_save):
             _do_import(str(issues_file), empty_state, lang, "fake_sp")
 
         assert saved["sp"] == "fake_sp"
-        assert len(empty_state["issues"]) == 1
+        assert len(empty_state["work_items"]) == 1
 
     def test_do_prepare_prints_narrative_reminders(self, mock_lang_with_zones, empty_state, tmp_path, capsys):
         from unittest.mock import MagicMock, patch
@@ -318,7 +317,7 @@ class TestCmdReviewPrepare:
         lang = MagicMock()
         lang.name = "typescript"
 
-        with patch("desloppify.state.save_state", mock_save):
+        with patch("desloppify.app.commands.review.importing.cmd.save_state", mock_save):
             _do_import(
                 str(issues_file),
                 empty_state,
@@ -592,6 +591,7 @@ class TestCmdReviewPrepare:
         audit = empty_state.get("assessment_import_audit", [])
         assert audit and audit[-1]["mode"] == "attested_external"
         assert audit[-1]["attested_external"] is True
+        assert audit[-1]["packet_sha256"] == packet_hash
 
     def test_do_validate_import_reports_mode_without_state_mutation(
         self, empty_state, tmp_path, capsys
@@ -706,12 +706,12 @@ class TestCmdReviewPrepare:
         lang = MagicMock()
         lang.name = "typescript"
 
-        with patch("desloppify.state.save_state") as mock_save:
+        with patch("desloppify.app.commands.review.importing.cmd.save_state") as mock_save:
             with pytest.raises(CommandError):
                 _do_import(str(issues_file), empty_state, lang, "sp")
         assert mock_save.called is False
         assert empty_state.get("subjective_assessments", {}) == {}
-        assert empty_state.get("issues", {}) == {}
+        assert empty_state.get("work_items", {}) == {}
 
     def test_do_import_allow_partial_persists_when_overridden(
         self, empty_state, tmp_path
@@ -736,7 +736,7 @@ class TestCmdReviewPrepare:
         lang = MagicMock()
         lang.name = "typescript"
 
-        with patch("desloppify.state.save_state") as mock_save:
+        with patch("desloppify.app.commands.review.importing.cmd.save_state") as mock_save:
             _do_import(
                 str(issues_file),
                 empty_state,
@@ -969,7 +969,7 @@ class TestCmdReviewPrepare:
                     "dimension_judgment": {
                         "high_level_elegance": {
                             "strengths": ["consistent module boundaries"],
-                            "issue_character": "structural coupling between subsystems",
+                            "dimension_character": "structural coupling between subsystems",
                             "score_rationale": "Orchestration seams cross module boundaries creating coupling that impacts maintainability.",
                         },
                     },
@@ -1001,7 +1001,7 @@ class TestCmdReviewPrepare:
                     "dimension_judgment": {
                         "mid_level_elegance": {
                             "strengths": ["clear module separation"],
-                            "issue_character": "adapter protocol inconsistency across sibling modules",
+                            "dimension_character": "adapter protocol inconsistency across sibling modules",
                             "score_rationale": "Handoff adapters diverge between sibling modules making the integration boundary harder to reason about.",
                         },
                     },
@@ -1033,7 +1033,7 @@ class TestCmdReviewPrepare:
                     "dimension_judgment": {
                         "high_level_elegance": {
                             "strengths": ["orchestration seams are mostly aligned"],
-                            "issue_character": "brittle edge seams in module boundary handling",
+                            "dimension_character": "brittle edge seams in module boundary handling",
                             "score_rationale": "Most orchestration boundaries are consistent but edge seams remain brittle enough to risk regressions.",
                         },
                     },
@@ -1065,7 +1065,7 @@ class TestCmdReviewPrepare:
                     "dimension_judgment": {
                         "low_level_elegance": {
                             "strengths": ["concise local internals"],
-                            "issue_character": "repetitive branching boilerplate in local flow",
+                            "dimension_character": "repetitive branching boilerplate in local flow",
                             "score_rationale": "Local function bodies are concise but repetitive branching patterns add unnecessary cognitive load.",
                         },
                     },
@@ -1208,7 +1208,7 @@ class TestCmdReviewPrepare:
                 "dimension_judgment": {
                     "mid_level_elegance": {
                         "strengths": ["seam boundaries are explicit"],
-                        "issue_character": "seam convention drift across adjacent modules",
+                        "dimension_character": "seam convention drift across adjacent modules",
                         "score_rationale": "Adjacent modules use mostly explicit seams but conventions drift enough to cause confusion at boundaries.",
                     }
                 },
@@ -1326,7 +1326,7 @@ class TestCmdReviewPrepare:
                 "dimension_judgment": {
                     "mid_level_elegance": {
                         "strengths": ["aligned seam conventions"],
-                        "issue_character": "minor inconsistencies in seam boundary alignment",
+                        "dimension_character": "minor inconsistencies in seam boundary alignment",
                         "score_rationale": "Seam conventions are mostly aligned but minor inconsistencies remain at module boundaries.",
                     }
                 },
@@ -1441,7 +1441,7 @@ class TestCmdReviewPrepare:
             "dimension_judgment": {
                 "mid_level_elegance": {
                     "strengths": ["clear hook separation"],
-                    "issue_character": "overlapping orchestration seams across sibling hooks",
+                    "dimension_character": "overlapping orchestration seams across sibling hooks",
                     "score_rationale": "Domain seams are split across sibling hooks causing overlapping orchestration that complicates reasoning.",
                 }
             },
@@ -1597,7 +1597,7 @@ class TestCmdReviewPrepare:
                             "dimension_judgment": {
                                 "mid_level_elegance": {
                                     "strengths": ["explicit seam boundaries"],
-                                    "issue_character": "seam style drift across nearby modules",
+                                    "dimension_character": "seam style drift across nearby modules",
                                     "score_rationale": "Seam interfaces are explicit but style differences across nearby modules reduce consistency.",
                                 }
                             },
@@ -1798,7 +1798,7 @@ class TestCmdReviewPrepare:
                 "dimension_judgment": {
                     "abstraction_fitness": {
                         "strengths": ["interfaces are mostly honest about their contracts"],
-                        "issue_character": "excessive wrapper indirection before reaching domain logic",
+                        "dimension_character": "excessive wrapper indirection before reaching domain logic",
                         "score_rationale": "Three wrapper layers before domain calls add significant indirection cost that outweighs abstraction leverage.",
                     },
                 },
@@ -2310,7 +2310,7 @@ class TestAutoResolveOnReImport:
         diff1 = import_holistic_issues(_as_review_payload(data1), state, "typescript")
         assert diff1["new"] == 2
         open_ids = [
-            fid for fid, f in state["issues"].items() if f["status"] == "open"
+            fid for fid, f in state["work_items"].items() if f["status"] == "open"
         ]
         assert len(open_ids) == 2
 
@@ -2333,7 +2333,7 @@ class TestAutoResolveOnReImport:
         # The 2 old issues should be marked fixed by the import.
         assert diff2["auto_resolved"] >= 2
         still_open = [
-            fid for fid, f in state["issues"].items() if f["status"] == "open"
+            fid for fid, f in state["work_items"].items() if f["status"] == "open"
         ]
         assert len(still_open) == 1
 
@@ -2365,7 +2365,7 @@ class TestAutoResolveOnReImport:
         diff1 = import_holistic_issues(_as_review_payload(data1), state, "typescript")
         assert diff1["new"] == 2
 
-        by_summary = {f["summary"]: fid for fid, f in state["issues"].items()}
+        by_summary = {f["summary"]: fid for fid, f in state["work_items"].items()}
         cross_mod_id = by_summary["too central"]
         abstraction_id = by_summary["dumping ground"]
 
@@ -2389,8 +2389,8 @@ class TestAutoResolveOnReImport:
         diff2 = import_holistic_issues(_as_review_payload(data2), state, "typescript")
         assert diff2["new"] == 1
         assert diff2["auto_resolved"] >= 1
-        assert state["issues"][abstraction_id]["status"] == "fixed"
-        assert state["issues"][cross_mod_id]["status"] == "open"
+        assert state["work_items"][abstraction_id]["status"] == "fixed"
+        assert state["work_items"][cross_mod_id]["status"] == "open"
 
     def test_per_file_auto_resolve_on_reimport(self):
         state = build_empty_state()
@@ -2433,7 +2433,7 @@ class TestAutoResolveOnReImport:
         # The comment_quality issue should be marked fixed by the explicit import.
         resolved = [
             f
-            for f in state["issues"].values()
+            for f in state["work_items"].values()
             if f["status"] == "fixed"
             and "not reported in latest per-file" in (f.get("note") or "")
         ]
@@ -2457,7 +2457,7 @@ class TestAutoResolveOnReImport:
         }
         import_review_issues(_as_review_payload(per_file), state, "typescript")
         per_file_ids = [
-            fid for fid, f in state["issues"].items() if f["status"] == "open"
+            fid for fid, f in state["work_items"].items() if f["status"] == "open"
         ]
         assert len(per_file_ids) == 1
 
@@ -2465,4 +2465,4 @@ class TestAutoResolveOnReImport:
         holistic = {"issues": []}
         import_holistic_issues(_as_review_payload(holistic), state, "typescript")
         # Per-file issue should still be open
-        assert state["issues"][per_file_ids[0]]["status"] == "open"
+        assert state["work_items"][per_file_ids[0]]["status"] == "open"

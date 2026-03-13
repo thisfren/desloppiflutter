@@ -51,7 +51,6 @@ class BatchDimensionJudgmentPayload(TypedDict, total=False):
     """Reviewer's holistic judgment narrative for a dimension."""
 
     strengths: list[str]
-    issue_character: str
     dimension_character: str
     score_rationale: str
 

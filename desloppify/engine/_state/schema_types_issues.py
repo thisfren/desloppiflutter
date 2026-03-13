@@ -1,4 +1,4 @@
-"""Issue and score-related TypedDict models for persisted state payloads."""
+"""Work-item and score-related TypedDict models for persisted state payloads."""
 
 from __future__ import annotations
 
@@ -7,16 +7,19 @@ from typing import Any, NotRequired, TypedDict
 from desloppify.base.enums import Status
 
 
-class Issue(TypedDict):
-    """The central data structure: a normalized issue from any detector."""
+class WorkItem(TypedDict):
+    """The central data structure: a normalized tracked work item."""
 
     id: str
     detector: str
+    work_item_kind: str
+    issue_kind: str
+    origin: str
     file: str
     tier: int
     confidence: str
     summary: str
-    # Known detail shapes per detector (non-exhaustive, for reference):
+    # Known detail shapes per detector/work item (non-exhaustive, for reference):
     #
     # structural:      {loc, complexity_score?, complexity_signals?: list[str],
     #                   name? (god class), ...god_class_metrics}
@@ -54,6 +57,11 @@ class Issue(TypedDict):
     resolution_attestation: NotRequired[dict[str, str | bool | None]]
     lang: NotRequired[str]
     zone: NotRequired[str]
+
+
+# Legacy type alias retained while the codebase finishes moving to
+# work-item-first naming.
+Issue = WorkItem
 
 
 class TierStats(TypedDict, total=False):
@@ -134,6 +142,7 @@ class ScanHistoryEntry(TypedDict, total=False):
 
 
 __all__ = [
+    "WorkItem",
     "Issue",
     "TierStats",
     "StateStats",

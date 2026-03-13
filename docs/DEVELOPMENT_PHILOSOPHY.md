@@ -32,7 +32,7 @@ This is the thing we care about most. If an agent can game the score to 100 with
 
 ## Language-agnostic
 
-The scoring model and the core engine don't know about any specific language. Language-specific stuff lives in plugins. The principles and scoring intent stay the same whether you're scanning TypeScript, Python, or Rust. Currently 28 languages, and the plugin framework makes adding more straightforward.
+The scoring model and the core engine don't know about any specific language. Language-specific stuff lives in plugins. The principles and scoring intent stay the same whether you're scanning TypeScript, Python, or Rust. Currently 29 languages, and the plugin framework makes adding more straightforward.
 
 ## Architectural boundaries
 

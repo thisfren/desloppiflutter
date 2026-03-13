@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._clusters_dependency import (
+from desloppify.intelligence.review.context_holistic.clusters.dependency import (
     _build_boundary_violations,
     _build_dead_code,
     _build_deferred_import_density,

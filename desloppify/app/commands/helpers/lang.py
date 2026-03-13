@@ -47,6 +47,15 @@ def load_lang_config(lang_name: str):
         ) from exc
 
 
+def load_lang_config_metadata(lang_name: str) -> LangConfig | None:
+    """Load language metadata, isolating broken plugins from unrelated commands."""
+    try:
+        return load_lang_config(lang_name)
+    except LangResolutionError as exc:
+        logger.warning("Skipping broken language plugin metadata for %s: %s", lang_name, exc)
+        return None
+
+
 EXTRA_ROOT_MARKERS = (
     "package.json",
     "pyproject.toml",
@@ -62,7 +71,9 @@ def _lang_config_markers() -> tuple[str, ...]:
     markers = set(EXTRA_ROOT_MARKERS)
 
     for lang_name in lang_api.available_langs():
-        cfg = load_lang_config(lang_name)
+        cfg = load_lang_config_metadata(lang_name)
+        if cfg is None:
+            continue
         for marker in getattr(cfg, "detect_markers", []) or []:
             if not isinstance(marker, str):
                 continue

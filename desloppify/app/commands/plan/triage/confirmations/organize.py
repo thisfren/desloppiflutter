@@ -21,6 +21,11 @@ from ..review_coverage import (
     triage_coverage,
 )
 from ..services import TriageServices, default_triage_services
+from ..validation.enrich_checks import (
+    _cluster_file_overlaps,
+    _clusters_with_directory_scatter,
+    _clusters_with_high_step_ratio,
+)
 
 
 def _require_enriched_clusters(plan: dict) -> bool:
@@ -67,12 +72,6 @@ def _print_reflect_activity_summary(plan: dict, stages: dict) -> None:
 
 
 def _print_cluster_shape_warnings(plan: dict) -> None:
-    from ..validation.core import (  # noqa: PLC0415
-        _cluster_file_overlaps,
-        _clusters_with_directory_scatter,
-        _clusters_with_high_step_ratio,
-    )
-
     scattered = _clusters_with_directory_scatter(plan)
     if scattered:
         print(colorize(f"\n  Warning: {len(scattered)} cluster(s) span many unrelated directories:", "yellow"))

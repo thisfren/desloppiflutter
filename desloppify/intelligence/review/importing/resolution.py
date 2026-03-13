@@ -18,8 +18,11 @@ def auto_resolve_review_issues(
     utc_now_fn=utc_now,
 ) -> None:
     """Mark stale open review issues fixed when an explicit import supersedes them."""
+    work_items = state.get("work_items") or state.get("issues", {})
+    state["work_items"] = work_items
+    state["issues"] = work_items
     diff.setdefault("auto_resolved", 0)
-    for issue_id, issue in state.get("issues", {}).items():
+    for issue_id, issue in work_items.items():
         if issue_id in new_ids or issue.get("status") != "open":
             continue
         if not should_resolve(issue):

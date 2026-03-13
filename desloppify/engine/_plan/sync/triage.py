@@ -67,7 +67,14 @@ def _inject_pending_triage_stages(
     Always appends to the back — new items never reorder existing queue.
     Returns list of injected stage IDs.
     """
-    stage_names = ("observe", "reflect", "organize", "enrich", "sense-check", "commit")
+    stage_names = (
+        "observe",
+        "reflect",
+        "organize",
+        "enrich",
+        "sense-check",
+        "commit",
+    )
     existing = set(order)
     injected: list[str] = []
     for sid, name in zip(TRIAGE_STAGE_IDS, stage_names, strict=False):

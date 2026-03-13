@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from desloppify.engine._plan.refresh_lifecycle import (
+    subjective_review_completed_for_scan,
+)
 from desloppify.engine._plan.policy import stale as stale_policy_mod
 from desloppify.engine._plan.constants import (
     SUBJECTIVE_PREFIX,
@@ -99,11 +102,11 @@ def _build_pending_import_scores_meta(
     import_payload: dict[str, Any] | None,
     issues_only_audit: dict[str, Any] | None,
 ) -> PendingImportScoresMeta:
-    provenance = {}
+    packet_sha256 = ""
     if isinstance(import_payload, dict):
         raw_provenance = import_payload.get("provenance")
         if isinstance(raw_provenance, dict):
-            provenance = raw_provenance
+            packet_sha256 = str(raw_provenance.get("packet_sha256", "")).strip()
     recorded_file = (
         str(import_file).strip()
         if isinstance(import_file, str) and import_file.strip()
@@ -114,11 +117,13 @@ def _build_pending_import_scores_meta(
     timestamp = ""
     if isinstance(issues_only_audit, dict):
         timestamp = str(issues_only_audit.get("timestamp", "")).strip()
+    if not packet_sha256 and isinstance(issues_only_audit, dict):
+        packet_sha256 = str(issues_only_audit.get("packet_sha256", "")).strip()
     return PendingImportScoresMeta(
         timestamp=timestamp,
         import_file=recorded_file,
         normalized_import_file=_normalize_match_path(recorded_file) or "",
-        packet_sha256=str(provenance.get("packet_sha256", "")).strip(),
+        packet_sha256=packet_sha256,
     )
 
 
@@ -244,6 +249,38 @@ def _no_unscored(
     )
 
 
+def _subjective_review_current_for_cycle(
+    plan: PlanModel,
+    state: StateModel,
+    *,
+    policy: SubjectiveVisibility | None,
+) -> bool:
+    """Return True when the current cycle no longer owes subjective review."""
+    if not _no_unscored(state, policy):
+        return False
+
+    refresh_state = _get_refresh_state(plan)
+    if refresh_state is None:
+        return True
+
+    postflight_scan_count = refresh_state.get("postflight_scan_completed_at_scan_count")
+    try:
+        current_scan_count = int(state.get("scan_count", 0) or 0)
+    except (TypeError, ValueError):
+        current_scan_count = 0
+
+    if postflight_scan_count != current_scan_count:
+        return True
+
+    if subjective_review_completed_for_scan(plan, scan_count=current_scan_count):
+        return True
+
+    if policy is not None:
+        return not (policy.stale_ids or policy.under_target_ids)
+
+    return True
+
+
 def _inject(plan: PlanModel, item_id: str) -> QueueSyncResult:
     """Inject *item_id* into the workflow prefix and clear stale skip entries."""
     order = plan["queue_order"]
@@ -254,6 +291,16 @@ def _inject(plan: PlanModel, item_id: str) -> QueueSyncResult:
     if isinstance(skipped, dict):
         skipped.pop(item_id, None)
     return QueueSyncResult(injected=[item_id])
+
+
+def clear_score_communicated_sentinel(plan: PlanModel) -> None:
+    """Clear the ``previous_plan_start_scores`` sentinel.
+
+    Call this in import/scan pre-steps when a trusted import completes or
+    a cycle boundary resets.  The sentinel gates ``sync_communicate_score_needed``
+    — clearing it allows communicate-score to re-inject next cycle.
+    """
+    plan.pop("previous_plan_start_scores", None)
 
 
 _EMPTY = QueueSyncResult
@@ -306,7 +353,7 @@ def sync_create_plan_needed(
         return _EMPTY()
     if any(sid in order for sid in TRIAGE_IDS):
         return _EMPTY()
-    if not _no_unscored(state, policy):
+    if not _subjective_review_current_for_cycle(plan, state, policy=policy):
         return _EMPTY()
 
     if not has_objective_backlog(state, policy):
@@ -395,18 +442,15 @@ def sync_communicate_score_needed(
     state: StateModel,
     *,
     policy: SubjectiveVisibility | None = None,
-    scores_just_imported: bool = False,
     current_scores: ScoreSnapshot | None = None,
 ) -> QueueSyncResult:
     """Inject ``workflow::communicate-score`` and rebaseline scores.
 
     Injects when:
-    - All initial subjective reviews are complete (no unscored dims), OR
-      scores were just imported (trusted/attested/override)
+    - All initial subjective reviews are complete (no unscored dims)
     - ``workflow::communicate-score`` is not already in the queue
     - Score has not already been communicated this cycle
-      (``previous_plan_start_scores`` absent), unless a trusted score import
-      explicitly refreshed the live score mid-cycle
+      (``previous_plan_start_scores`` absent)
 
     When injected and *current_scores* is provided, ``plan_start_scores``
     is rebaselined to the current score so the score display unfreezes at
@@ -422,9 +466,9 @@ def sync_communicate_score_needed(
         return _EMPTY()
     # Already communicated this cycle — previous_plan_start_scores is set
     # at injection time and cleared at cycle boundaries.
-    if "previous_plan_start_scores" in plan and not scores_just_imported:
+    if "previous_plan_start_scores" in plan:
         return _EMPTY()
-    if not scores_just_imported and not _no_unscored(state, policy):
+    if not _subjective_review_current_for_cycle(plan, state, policy=policy):
         return _EMPTY()
 
     if current_scores is not None:
@@ -459,6 +503,7 @@ def _rebaseline_plan_start_scores(
 __all__ = [
     "PendingImportScoresMeta",
     "ScoreSnapshot",
+    "clear_score_communicated_sentinel",
     "import_scores_meta_matches",
     "pending_import_scores_meta",
     "sync_communicate_score_needed",

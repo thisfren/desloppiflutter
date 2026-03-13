@@ -12,7 +12,7 @@ That score generates a scorecard badge for your GitHub profile or README:
 
 <img src="assets/scorecard.png" width="100%">
 
-Currently supports 28 languages — full plugin depth for TypeScript, Python, C#, C++, Dart, GDScript, Go, and Rust; generic linter + tree-sitter support for Ruby, Java, Kotlin, and 16 more. For C++ projects, `compile_commands.json` is the primary analysis path and `Makefile` repositories fall back to best-effort local include scanning.
+Currently supports 29 languages — full plugin depth for TypeScript, Python, C#, C++, Dart, GDScript, Go, and Rust; generic linter + tree-sitter support for Ruby, Java, Kotlin, and 18 more. For C++ projects, `compile_commands.json` is the primary analysis path and `Makefile` repositories fall back to best-effort local include scanning.
 
 ## For your agent's consideration...
 
@@ -24,6 +24,8 @@ Run ALL of the following (requires Python 3.11+):
 
 pip install --upgrade "desloppify[full]"
 desloppify update-skill claude    # installs the full workflow guide — pick yours: claude, cursor, codex, copilot, windsurf, gemini
+
+Add .desloppify/ to your .gitignore — it contains local state that shouldn't be committed.
 
 Before scanning, check for directories that should be excluded (vendor, build output,
 generated code, worktrees, etc.) and exclude obvious ones with `desloppify exclude <path>`.

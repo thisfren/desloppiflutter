@@ -11,20 +11,24 @@ from desloppify.base.discovery.paths import get_project_root
 from desloppify.base.output.terminal import log
 from desloppify.engine._state.filtering import make_issue
 from desloppify.engine.policy.zones import should_skip_issue
-from desloppify.languages._framework.base.types import DetectorCoverageStatus, LangRuntimeContract
+from desloppify.languages._framework.base.types import (
+    DetectorCoverageStatus,
+    DetectorEntry,
+    LangRuntimeContract,
+)
 from desloppify.state_io import Issue
 
 
 def _filter_boilerplate_entries_by_zone(
-    entries: list[dict[str, Any]],
+    entries: list[DetectorEntry],
     zone_map,
-) -> list[dict[str, Any]]:
+) -> list[DetectorEntry]:
     """Keep only in-scope, zone-allowed boilerplate clusters."""
     if zone_map is None:
         return entries
 
     known_files = set(zone_map.all_files())
-    filtered: list[dict[str, Any]] = []
+    filtered: list[DetectorEntry] = []
     skipped = 0
     for entry in entries:
         locations = entry.get("locations", [])
@@ -83,7 +87,7 @@ def _find_external_test_files(
 
 def _entries_to_issues(
     detector: str,
-    entries: list[dict[str, Any]],
+    entries: list[DetectorEntry],
     *,
     default_name: str = "",
     include_zone: bool = False,

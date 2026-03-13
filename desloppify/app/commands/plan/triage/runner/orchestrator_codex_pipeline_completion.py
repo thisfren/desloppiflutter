@@ -119,13 +119,29 @@ def validate_and_confirm_stage(
 def build_completion_strategy(stages_data: Mapping[str, Mapping[str, Any]]) -> str:
     """Derive a completion strategy from stage reports."""
     strategy_parts: list[str] = []
+    recorded_stages: list[str] = []
     for stage in STAGES:
         report = str(stages_data.get(stage, {}).get("report", ""))
         if report:
+            recorded_stages.append(stage)
             strategy_parts.append(f"[{stage}] {report[:200]}")
     strategy = " ".join(strategy_parts)
     if len(strategy) < 200:
-        strategy = strategy + " " + "Automated triage via codex subagent pipeline. " * 3
+        if recorded_stages:
+            stage_list = ", ".join(recorded_stages)
+            summary = (
+                f"Triage covered {len(recorded_stages)} stage(s): {stage_list}. "
+                "Use the recorded stage reports as the execution plan, preserve the "
+                "observe and reflect evidence trail, keep organize and enrich changes "
+                "aligned with the recorded dispositions, and verify each cluster before completion."
+            )
+            strategy = f"{strategy} {summary}".strip()
+        else:
+            strategy = (
+                "Triage completed without recorded stage reports. Before completion, capture "
+                "the execution order, the cluster or skip decisions that will change plan state, "
+                "and the verification steps needed to confirm the resulting queue is correct."
+            )
     return strategy
 
 

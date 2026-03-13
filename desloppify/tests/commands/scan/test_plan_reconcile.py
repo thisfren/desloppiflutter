@@ -178,7 +178,7 @@ class TestApplyPlanReconciliation:
             "issue-1": _make_issue(status="resolved"),
             "issue-2": _make_issue(status="open"),
         })
-        from desloppify.engine._plan.reconcile import reconcile_plan_after_scan
+        from desloppify.engine._plan.scan_issue_reconcile import reconcile_plan_after_scan
         result = reconcile_plan_after_scan(plan, state)
         assert "issue-1" in result.superseded
         assert "issue-1" in plan["superseded"]
@@ -191,7 +191,7 @@ class TestApplyPlanReconciliation:
         plan["queue_order"] = ["gone-id"]
         plan["overrides"] = {"gone-id": {"issue_id": "gone-id"}}
         state = _make_state(issues={})
-        from desloppify.engine._plan.reconcile import reconcile_plan_after_scan
+        from desloppify.engine._plan.scan_issue_reconcile import reconcile_plan_after_scan
         result = reconcile_plan_after_scan(plan, state)
         assert "gone-id" in result.superseded
 
@@ -202,83 +202,118 @@ class TestApplyPlanReconciliation:
         state = _make_state(issues={
             "issue-1": _make_issue(status="open"),
         })
-        changed = reconcile_mod._apply_plan_reconciliation(
-            plan, state, reconcile_mod.reconcile_plan_after_scan,
-        )
+        changed = reconcile_mod._apply_plan_reconciliation(plan, state)
         assert changed is False
 
     def test_skips_when_no_user_content(self):
         plan = empty_plan()
         state = _make_state()
-        changed = reconcile_mod._apply_plan_reconciliation(
-            plan, state, reconcile_mod.reconcile_plan_after_scan,
-        )
+        changed = reconcile_mod._apply_plan_reconciliation(plan, state)
         assert changed is False
 
 
 # ---------------------------------------------------------------------------
-# Tests: _sync_subjective_dimensions_display (merged helper)
+# Tests: _display_reconcile_results
 # ---------------------------------------------------------------------------
 
-class TestSyncSubjectiveDimensionsDisplay:
+class TestDisplayReconcileResults:
 
-    def test_injects_ids(self):
+    def test_reports_subjective_injection(self, capsys):
         plan = empty_plan()
-        plan["queue_order"] = ["issue-1"]
-
-        def mock_sync(p, s):
-            result = QueueSyncResult()
-            result.injected = ["subjective::naming"]
-            p["queue_order"].append("subjective::naming")
-            return result
-
-        changed = reconcile_mod._sync_subjective_dimensions_display(plan, {}, mock_sync)
-        assert changed is True
-        assert "subjective::naming" in plan["queue_order"]
+        reconcile_mod._display_reconcile_results(
+            reconcile_mod.ReconcileResult(
+                subjective=QueueSyncResult(injected=["subjective::naming"])
+            ),
+            plan,
+            mid_cycle=False,
+        )
+        captured = capsys.readouterr()
+        assert "1 subjective" in captured.out
 
     def test_reports_resurfaced(self, capsys):
         plan = empty_plan()
-
-        def mock_sync(p, s):
-            result = QueueSyncResult()
-            result.resurfaced = ["subjective::naming"]
-            return result
-
-        reconcile_mod._sync_subjective_dimensions_display(plan, {}, mock_sync)
+        reconcile_mod._display_reconcile_results(
+            reconcile_mod.ReconcileResult(
+                subjective=QueueSyncResult(resurfaced=["subjective::naming"])
+            ),
+            plan,
+            mid_cycle=False,
+        )
         captured = capsys.readouterr()
         assert "resurfaced" in captured.out.lower()
 
     def test_reports_pruned(self, capsys):
         plan = empty_plan()
-
-        def mock_sync(p, s):
-            result = QueueSyncResult()
-            result.pruned = ["subjective::naming"]
-            return result
-
-        changed = reconcile_mod._sync_subjective_dimensions_display(plan, {}, mock_sync)
-        assert changed is True
+        reconcile_mod._display_reconcile_results(
+            reconcile_mod.ReconcileResult(
+                subjective=QueueSyncResult(pruned=["subjective::naming"])
+            ),
+            plan,
+            mid_cycle=False,
+        )
         captured = capsys.readouterr()
         assert "refreshed" in captured.out.lower() or "removed" in captured.out.lower()
 
-    def test_reports_injected(self, capsys):
+    def test_reports_create_plan(self, capsys):
         plan = empty_plan()
-
-        def mock_sync(p, s):
-            result = QueueSyncResult()
-            result.injected = ["subjective::naming"]
-            return result
-
-        reconcile_mod._sync_subjective_dimensions_display(plan, {}, mock_sync)
-        captured = capsys.readouterr()
-        assert "1 subjective" in captured.out
-
-    def test_no_change_when_nothing(self):
-        plan = empty_plan()
-        changed = reconcile_mod._sync_subjective_dimensions_display(
-            plan, {}, lambda p, s: QueueSyncResult(),
+        reconcile_mod._display_reconcile_results(
+            reconcile_mod.ReconcileResult(
+                create_plan=QueueSyncResult(injected=["workflow::create-plan"])
+            ),
+            plan,
+            mid_cycle=False,
         )
-        assert changed is False
+        captured = capsys.readouterr()
+        assert "create-plan" in captured.out
+
+    def test_reports_mid_cycle_skip(self, capsys):
+        plan = empty_plan()
+        reconcile_mod._display_reconcile_results(
+            reconcile_mod.ReconcileResult(),
+            plan,
+            mid_cycle=True,
+        )
+        captured = capsys.readouterr()
+        assert "mid-cycle scan" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Tests: _is_mid_cycle_scan
+# ---------------------------------------------------------------------------
+
+class TestIsMidCycleScan:
+
+    def test_false_when_cycle_not_active(self):
+        plan = empty_plan()
+        state = _make_state()
+
+        assert reconcile_mod._is_mid_cycle_scan(plan, state) is False
+
+    def test_false_when_only_synthetic_or_skipped_items_remain(self):
+        plan = empty_plan()
+        plan["plan_start_scores"] = {"strict": 80.0}
+        plan["queue_order"] = [
+            "workflow::communicate-score",
+            "issue-1",
+        ]
+        plan["skipped"] = {
+            "issue-1": {
+                "issue_id": "issue-1",
+                "kind": "temporary",
+                "skipped_at_scan": 1,
+            }
+        }
+        state = _make_state()
+
+        assert reconcile_mod._is_mid_cycle_scan(plan, state) is False
+
+    def test_true_when_substantive_queue_item_remains(self):
+        plan = empty_plan()
+        plan["plan_start_scores"] = {"strict": 80.0}
+        plan["queue_order"] = ["workflow::communicate-score", "issue-1"]
+        state = _make_state()
+
+        assert reconcile_mod._is_mid_cycle_scan(plan, state) is True
 
 
 # ---------------------------------------------------------------------------
@@ -341,5 +376,3 @@ class TestSyncPlanStartScoresAndLog:
         assert state["_plan_start_scores_for_reveal"]["strict"] == 70.0
         log_actions = [e["action"] for e in plan["execution_log"]]
         assert "clear_start_scores" in log_actions
-
-

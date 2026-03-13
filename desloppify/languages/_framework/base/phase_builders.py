@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 from .shared_phases import (
+    _detect_security_issues_default,
     phase_boilerplate_duplication,
     phase_dupes,
     phase_security,
@@ -37,7 +40,11 @@ SHARED_PHASE_FACTORIES = {
         exclusive_detector="desloppify.engine.detectors.test_coverage",
     ),
     "security": _make_detector_phase_factory(
-        "Security", phase_security,
+        "Security",
+        partial(
+            phase_security,
+            detect_security_issues=_detect_security_issues_default,
+        ),
         exclusive_detector="desloppify.engine.detectors.security",
     ),
     "signature": _make_detector_phase_factory(

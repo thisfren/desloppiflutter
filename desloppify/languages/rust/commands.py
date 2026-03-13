@@ -51,7 +51,6 @@ from desloppify.languages.rust.tools import (
     CLIPPY_WARNING_CMD as RUST_CLIPPY_CMD,
     parse_cargo_errors,
     parse_clippy_messages,
-    parse_rustdoc_messages,
     run_rustdoc_result,
 )
 

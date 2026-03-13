@@ -80,9 +80,10 @@ class TestResolveFixerResults:
     """_resolve_fixer_results marks matching issues as fixed."""
 
     def _make_state_with_issues(self, *issues):
-        state = {"issues": {}}
+        work_items: dict[str, dict] = {}
+        state = {"work_items": work_items, "issues": work_items}
         for fid, status in issues:
-            state["issues"][fid] = {
+            work_items[fid] = {
                 "id": fid,
                 "status": status,
                 "detector": "unused",
@@ -104,8 +105,8 @@ class TestResolveFixerResults:
         results = [{"file": "a.ts", "removed": ["foo"]}]
         resolved = _resolve_fixer_results(state, results, "unused", "unused-imports")
         assert resolved == ["unused::a.ts::foo"]
-        assert state["issues"]["unused::a.ts::foo"]["status"] == "fixed"
-        assert state["issues"]["unused::a.ts::bar"]["status"] == "open"
+        assert state["work_items"]["unused::a.ts::foo"]["status"] == "fixed"
+        assert state["work_items"]["unused::a.ts::bar"]["status"] == "open"
 
     def test_skips_already_fixed(self, monkeypatch):
         monkeypatch.setattr(fix_apply_mod, "rel", lambda p: p)
@@ -131,7 +132,7 @@ class TestResolveFixerResults:
         state = self._make_state_with_issues(("unused::a.ts::foo", "open"))
         results = [{"file": "a.ts", "removed": ["foo"]}]
         _resolve_fixer_results(state, results, "unused", "unused-imports")
-        note = state["issues"]["unused::a.ts::foo"]["note"]
+        note = state["work_items"]["unused::a.ts::foo"]["note"]
         assert "auto-fixed" in note
         assert "unused-imports" in note
 
@@ -142,7 +143,7 @@ class TestResolveFixerResults:
             ("unused::a.ts::foo", "open"),
             ("unused::b.ts::bar", "open"),
         )
-        state["issues"]["unused::b.ts::bar"]["file"] = "b.ts"
+        state["work_items"]["unused::b.ts::bar"]["file"] = "b.ts"
 
         results = [
             {"file": "a.ts", "removed": ["foo"]},

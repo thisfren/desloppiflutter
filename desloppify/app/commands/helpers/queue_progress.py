@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import enum
-import importlib
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
+from desloppify.app.commands.helpers.dynamic_loaders import load_score_update_module
 from desloppify.base.output.terminal import colorize
 from desloppify.engine._plan.refresh_lifecycle import (
+    COARSE_PHASE_MAP,
+    coarse_lifecycle_phase,
     LIFECYCLE_PHASE_EXECUTE,
     LIFECYCLE_PHASE_REVIEW,
     LIFECYCLE_PHASE_SCAN,
@@ -23,7 +25,6 @@ from desloppify.engine._work_queue.core import QueueBuildOptions
 from desloppify.engine._work_queue.context import queue_context
 from desloppify.engine._work_queue.helpers import is_subjective_queue_item
 from desloppify.engine._work_queue.plan_order import collapse_clusters
-from desloppify.engine._work_queue.snapshot import coarse_phase_name
 from desloppify.engine.planning.queue_policy import build_execution_queue
 from desloppify.app.commands.helpers.queue_progress_render import (
     format_plan_delta,
@@ -153,7 +154,13 @@ def plan_aware_queue_breakdown(
         if context is not None
         else queue_context(state, plan=effective_plan).snapshot
     )
-    lifecycle_phase = coarse_phase_name(snapshot.phase)
+    refresh_state = effective_plan.get("refresh_state") if isinstance(effective_plan, dict) else None
+    persisted_phase = (
+        coarse_lifecycle_phase(effective_plan)
+        if isinstance(refresh_state, dict) and isinstance(refresh_state.get("lifecycle_phase"), str)
+        else None
+    )
+    lifecycle_phase = persisted_phase or COARSE_PHASE_MAP.get(snapshot.phase, snapshot.phase)
     if effective_plan and not effective_plan.get("active_cluster"):
         items = collapse_clusters(items, effective_plan)
 
@@ -208,7 +215,7 @@ def plan_aware_queue_breakdown(
             cluster_member_ids = set(cluster_data.get("issue_ids", []))
             open_issues = {
                 fid
-                for fid, f in state.get("issues", {}).items()
+                for fid, f in (state.get("work_items") or state.get("issues", {})).items()
                 if f.get("status") == "open"
             }
             focus_cluster_count = len(cluster_member_ids & open_issues)
@@ -236,6 +243,7 @@ def _snapshot_item_ids(snapshot: object) -> set[str] | None:
     partition_names = (
         "all_objective_items",
         "all_initial_review_items",
+        "all_postflight_assessment_items",
         "all_postflight_review_items",
         "all_scan_items",
         "all_postflight_workflow_items",
@@ -336,9 +344,7 @@ def print_execution_or_reveal(
         return
 
     # LIVE or PHASE_TRANSITION: show current scores
-    score_update_mod = importlib.import_module(
-        "desloppify.app.commands.helpers.score_update"
-    )
+    score_update_mod = load_score_update_module()
     score_update_mod.print_score_update(state, prev)
 
     if mode is ScoreDisplayMode.PHASE_TRANSITION:

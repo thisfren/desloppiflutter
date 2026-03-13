@@ -15,8 +15,7 @@ from desloppify.base.config import (
     target_strict_score_from_config,
 )
 from desloppify.engine._plan.persistence import (
-    has_living_plan,
-    load_plan,
+    resolve_plan_load_status as resolve_persisted_plan_load_status,
 )
 from desloppify.engine.plan_state import PlanLoadStatus
 from desloppify.engine._state.schema import StateModel
@@ -54,28 +53,7 @@ def resolve_plan_load_status(
     """Resolve plan loading and explicitly report degraded mode."""
     if not isinstance(plan, _PlanAutoLoad):
         return PlanLoadStatus(plan=plan, degraded=False, error_kind=None)
-
-    if not has_living_plan():
-        return PlanLoadStatus(plan=None, degraded=False, error_kind=None)
-
-    try:
-        resolved_plan = load_plan()
-        return PlanLoadStatus(plan=resolved_plan, degraded=False, error_kind=None)
-    except OSError as exc:
-        return PlanLoadStatus(
-            plan=None,
-            degraded=True,
-            error_kind=exc.__class__.__name__,
-        )
-    except (
-        ValueError,
-        UnicodeDecodeError,
-    ) as exc:
-        return PlanLoadStatus(
-            plan=None,
-            degraded=True,
-            error_kind=exc.__class__.__name__,
-        )
+    return resolve_persisted_plan_load_status()
 
 
 def queue_context(

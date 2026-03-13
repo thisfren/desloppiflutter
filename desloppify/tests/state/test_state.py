@@ -5,6 +5,8 @@ from pathlib import Path
 
 
 from desloppify.engine._state import filtering as state_query_mod
+from desloppify.engine._state.issue_semantics import MECHANICAL_DEFECT, SCAN_ORIGIN
+from desloppify.engine._state.schema import CURRENT_VERSION
 from desloppify.state import (
     MergeScanOptions,
     apply_issue_noise_budget,
@@ -238,6 +240,8 @@ class TestMakeIssue:
         assert f["tier"] == 2
         assert f["confidence"] == "medium"
         assert f["summary"] == "sum"
+        assert f["issue_kind"] == MECHANICAL_DEFECT
+        assert f["origin"] == SCAN_ORIGIN
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +252,7 @@ class TestMakeIssue:
 class TestEmptyState:
     def test_structure(self):
         s = empty_state()
-        assert s["version"] == 1
+        assert s["version"] == CURRENT_VERSION
         assert s["last_scan"] is None
         assert s["scan_count"] == 0
         assert "config" not in s  # config moved to config.json
@@ -269,7 +273,7 @@ class TestEmptyState:
 class TestLoadState:
     def test_nonexistent_file_returns_empty_state(self, tmp_path):
         s = load_state(tmp_path / "missing.json")
-        assert s["version"] == 1
+        assert s["version"] == CURRENT_VERSION
         assert s["issues"] == {}
 
     def test_valid_json_returns_parsed_data(self, tmp_path):
@@ -290,6 +294,18 @@ class TestLoadState:
         assert s["scan_count"] == 0
         assert s["stats"] == {}
         assert s["issues"]["x"]["status"] == "open"
+        assert s["issues"]["x"]["issue_kind"] == MECHANICAL_DEFECT
+        assert s["issues"]["x"]["origin"] == SCAN_ORIGIN
+        validate_state_invariants(s)
+
+    def test_work_items_payload_gets_normalized(self, tmp_path):
+        p = tmp_path / "state.json"
+        p.write_text(
+            json.dumps({"version": 2, "work_items": {"x": {"id": "x", "tier": 3}}})
+        )
+        s = load_state(p)
+        assert s["issues"]["x"]["status"] == "open"
+        assert s["issues"]["x"]["work_item_kind"] == MECHANICAL_DEFECT
         validate_state_invariants(s)
 
     def test_corrupt_json_tries_backup(self, tmp_path):
@@ -306,7 +322,7 @@ class TestLoadState:
         p = tmp_path / "state.json"
         p.write_text("{bad json!!")
         s = load_state(p)
-        assert s["version"] == 1
+        assert s["version"] == CURRENT_VERSION
         assert s["issues"] == {}
 
     def test_corrupt_json_renames_file(self, tmp_path):
@@ -322,7 +338,7 @@ class TestLoadState:
         backup.write_text("{also bad")
 
         s = load_state(p)
-        assert s["version"] == 1
+        assert s["version"] == CURRENT_VERSION
         assert s["issues"] == {}
 
 
@@ -338,7 +354,9 @@ class TestSaveState:
         save_state(st, p)
         assert p.exists()
         loaded = json.loads(p.read_text())
-        assert loaded["version"] == 1
+        assert loaded["version"] == CURRENT_VERSION
+        assert "work_items" in loaded
+        assert "issues" not in loaded
 
     def test_creates_backup_of_previous(self, tmp_path):
         p = tmp_path / "state.json"
@@ -370,6 +388,7 @@ class TestSaveState:
         loaded = json.loads(p.read_text())
         assert loaded["custom_set"] == [1, 2, 3]  # sorted
         assert loaded["custom_path"] == "/tmp/hello"
+        assert "work_items" in loaded
 
     def test_invalid_status_gets_normalized_before_save(self, tmp_path):
         p = tmp_path / "state.json"
@@ -378,7 +397,7 @@ class TestSaveState:
         ensure_state_defaults(st)
         save_state(st, p)
         loaded = json.loads(p.read_text())
-        assert loaded["issues"]["x"]["status"] == "open"
+        assert loaded["work_items"]["x"]["status"] == "open"
 
 
 # ---------------------------------------------------------------------------
@@ -603,18 +622,30 @@ class TestUpsertIssues:
 class TestMissingIssuesResolved:
     """Issues present in state but absent from scan stay user-controlled."""
 
-    def test_missing_issue_stays_open(self):
-        """An open issue that disappears from scan remains open until resolved."""
+    def test_missing_issue_stays_open_when_file_exists(self, tmp_path):
+        """An open issue whose file still exists stays open until resolved."""
+        (tmp_path / "a.py").write_text("# exists")
         st = empty_state()
         old = _make_raw_issue("det::a.py::fn", detector="det", file="a.py")
         old["lang"] = "python"
         st["issues"]["det::a.py::fn"] = old
 
-        # Merge an empty scan — the old issue stays open.
-        diff = merge_scan(st, [], MergeScanOptions(lang="python", force_resolve=True))
+        diff = merge_scan(st, [], MergeScanOptions(lang="python", force_resolve=True, project_root=str(tmp_path)))
         assert diff["auto_resolved"] == 0
         assert st["issues"]["det::a.py::fn"]["status"] == "open"
         assert st["issues"]["det::a.py::fn"]["resolved_at"] is None
+
+    def test_missing_issue_auto_resolved_when_file_deleted(self, tmp_path):
+        """An open issue for a deleted file is auto-resolved on rescan."""
+        st = empty_state()
+        old = _make_raw_issue("det::a.py::fn", detector="det", file="a.py")
+        old["lang"] = "python"
+        st["issues"]["det::a.py::fn"] = old
+
+        diff = merge_scan(st, [], MergeScanOptions(lang="python", force_resolve=True, project_root=str(tmp_path)))
+        assert diff["auto_resolved"] == 1
+        assert st["issues"]["det::a.py::fn"]["status"] == "auto_resolved"
+        assert "no longer exists" in st["issues"]["det::a.py::fn"]["note"]
 
     def test_missing_fixed_issue_gets_scan_verified(self):
         """A manually fixed issue stays fixed and gains scan corroboration."""
@@ -852,4 +883,3 @@ class TestWontfixAutoResolution:
         # Overall/strict are dragged down by the low assessment score.
         assert st["overall_score"] < 100.0
         assert st["strict_score"] < 100.0
-

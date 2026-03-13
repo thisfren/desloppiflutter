@@ -189,7 +189,7 @@ class TestSmellsActionWithNoReact:
         """When smells issues exist but none are dead_useeffect, no auto-fix for it."""
         # State has a non-useeffect smell but by_detector still shows smells count
         state = dict(empty_state)
-        state["issues"] = {
+        state["work_items"] = {
             "smells::server.ts::debug_tag": {
                 "status": "open",
                 "detector": "smells",
@@ -214,7 +214,7 @@ class TestSmellsActionWithNoReact:
     def test_smells_with_dead_useeffect_issue_gets_auto_fix(self, empty_state):
         """When a dead_useeffect issue exists, dead-useeffect fixer is suggested."""
         state = dict(empty_state)
-        state["issues"] = {
+        state["work_items"] = {
             "smells::app.tsx::dead_useeffect": {
                 "status": "open",
                 "detector": "smells",
@@ -238,7 +238,7 @@ class TestSmellsActionWithNoReact:
     def test_smells_with_empty_if_chain_issue_gets_correct_fixer(self, empty_state):
         """When only empty_if_chain issues exist, empty-if-chain fixer is suggested."""
         state = dict(empty_state)
-        state["issues"] = {
+        state["work_items"] = {
             "smells::util.ts::empty_if_chain": {
                 "status": "open",
                 "detector": "smells",

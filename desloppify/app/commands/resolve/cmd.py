@@ -74,6 +74,8 @@ def _load_state_with_guards(
     if args.status == "fixed":
         require_triage_current_or_exit(
             state=state,
+            plan=plan_access.plan if isinstance(plan_access.plan, dict) and not plan_access.degraded else None,
+            patterns=args.patterns,
             bypass=bool(getattr(args, "force_resolve", False)),
             attest=getattr(args, "attest", "") or "",
         )
@@ -134,6 +136,7 @@ def cmd_resolve(args: argparse.Namespace) -> None:
         args=args,
         all_resolved=all_resolved,
         attestation=attestation,
+        state=state,
         state_file=state_file,
     )
     mid_cluster = (

@@ -17,7 +17,7 @@ from desloppify.engine._plan.operations.skip import (
     skip_items,
     unskip_items,
 )
-from desloppify.engine._plan.reconcile import reconcile_plan_after_scan
+from desloppify.engine._plan.scan_issue_reconcile import reconcile_plan_after_scan
 from desloppify.engine._plan.schema import empty_plan
 from desloppify.engine._plan.skip_policy import (
     skip_kind_needs_state_reopen,
@@ -212,9 +212,9 @@ class TestTriageDismissSetsState:
         result = apply_triage_to_plan(plan, state, triage, trigger="test")
         assert result.issues_dismissed == 1
         # State status should be updated
-        assert state["issues"]["b"]["status"] == "triaged_out"
+        assert state["work_items"]["b"]["status"] == "triaged_out"
         # Non-dismissed issue should stay open
-        assert state["issues"]["a"]["status"] == "open"
+        assert state["work_items"]["a"]["status"] == "open"
 
 
 # ---------------------------------------------------------------------------
@@ -299,9 +299,9 @@ class TestReconcileDataMigration:
             "scan_count": 5,
         }
         reconcile_plan_after_scan(plan, state)
-        assert state["issues"]["a"]["status"] == "deferred"
-        assert state["issues"]["b"]["status"] == "triaged_out"
-        assert state["issues"]["c"]["status"] == "open"
+        assert state["work_items"]["a"]["status"] == "deferred"
+        assert state["work_items"]["b"]["status"] == "triaged_out"
+        assert state["work_items"]["c"]["status"] == "open"
 
     def test_reconcile_does_not_re_sync_already_correct(self):
         plan = empty_plan()
@@ -315,7 +315,7 @@ class TestReconcileDataMigration:
             "scan_count": 5,
         }
         reconcile_plan_after_scan(plan, state)
-        assert state["issues"]["a"]["status"] == "deferred"
+        assert state["work_items"]["a"]["status"] == "deferred"
 
     def test_reconcile_resurfaces_and_reopens(self):
         plan = empty_plan()
@@ -336,7 +336,7 @@ class TestReconcileDataMigration:
         result = reconcile_plan_after_scan(plan, state)
         assert "a" in result.resurfaced
         # State should be reopened from deferred back to open
-        assert state["issues"]["a"]["status"] == "open"
+        assert state["work_items"]["a"]["status"] == "open"
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +444,7 @@ class TestFullLifecycleRoundtrip:
             dismissed_issues=[DismissedIssue(issue_id="x", reason="not needed")],
         )
         apply_triage_to_plan(plan, state, triage, trigger="test")
-        assert state["issues"]["x"]["status"] == "triaged_out"
+        assert state["work_items"]["x"]["status"] == "triaged_out"
         assert "x" in plan["skipped"]
 
         # Unskip

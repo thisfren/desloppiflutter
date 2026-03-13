@@ -198,7 +198,7 @@ def test_triage_phase_banner_reports_recovery_gap() -> None:
     banner = triage_mod.triage_phase_banner(plan, state=state)
 
     assert "TRIAGE RECOVERY NEEDED" in banner
-    assert "3 review issue(s)" in banner
+    assert "3 review work item(s)" in banner
 
 
 def test_action_guidance_blocks_enrich_until_organize_confirmed(monkeypatch, capsys) -> None:

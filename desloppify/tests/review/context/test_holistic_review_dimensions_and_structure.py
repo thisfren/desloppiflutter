@@ -91,7 +91,7 @@ def _state_with_holistic_issues(*issues_args):
     state["objective_score"] = 45.0
     state["strict_score"] = 38.0
     for fid, conf, dim, summary in issues_args:
-        state["issues"][fid] = {
+        state["work_items"][fid] = {
             "id": fid,
             "file": ".",
             "status": "open",
@@ -242,7 +242,7 @@ class TestGenerateRemediationPlan:
             ),
         )
         # Add a resolved issue that should NOT appear
-        state["issues"]["review::.::holistic::test::def"] = {
+        state["work_items"]["review::.::holistic::test::def"] = {
             "id": "review::.::holistic::test::def",
             "file": ".",
             "status": "fixed",

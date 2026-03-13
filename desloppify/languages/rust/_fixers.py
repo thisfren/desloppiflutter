@@ -6,13 +6,15 @@ from pathlib import Path
 
 from desloppify.base.discovery.file_paths import rel, resolve_path, safe_write_text
 from desloppify.languages._framework.base.types import FixResult, FixerConfig
-from desloppify.languages.rust.detectors.custom import (
+from desloppify.languages.rust.detectors.api import (
+    detect_import_hygiene,
+    replace_same_crate_imports,
+)
+from desloppify.languages.rust.detectors.cargo_policy import (
     add_missing_features_to_manifest,
     detect_doctest_hygiene,
     detect_feature_hygiene,
-    detect_import_hygiene,
     ensure_readme_doctest_harness,
-    replace_same_crate_imports,
 )
 
 

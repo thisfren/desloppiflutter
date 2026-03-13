@@ -7,6 +7,7 @@ from typing import Any, NotRequired, Required, TypedDict
 from desloppify.engine._state.schema_types_issues import (
     DimensionScore,
     Issue,
+    WorkItem,
     ScanHistoryEntry,
     ScoreConfidenceDetector,
     ScoreConfidenceModel,
@@ -49,7 +50,8 @@ class StateModel(TypedDict, total=False):
     strict_score: Required[float]
     verified_strict_score: Required[float]
     stats: Required[StateStats]
-    issues: Required[dict[str, Issue]]
+    work_items: Required[dict[str, WorkItem]]
+    issues: NotRequired[dict[str, WorkItem]]
     dimension_scores: dict[str, DimensionScore]
     scan_path: str | None
     tool_hash: str
@@ -101,6 +103,7 @@ __all__ = [
     "AssessmentImportAuditEntry",
     "AttestationLogEntry",
     "Issue",
+    "WorkItem",
     "TierStats",
     "StateStats",
     "DimensionScore",

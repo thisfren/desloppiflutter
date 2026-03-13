@@ -203,8 +203,9 @@ def _build_dep_graph_for_path(path: Path, lang) -> dict:
 def _issues_by_file(state: dict | None) -> dict[str, list]:
     """Group issues from state by file path."""
     result: dict[str, list] = defaultdict(list)
-    if state and state.get("issues"):
-        for f in state["issues"].values():
+    work_items = (state.get("work_items") or state.get("issues", {})) if state else {}
+    if work_items:
+        for f in work_items.values():
             result[f["file"]].append(f)
     return result
 

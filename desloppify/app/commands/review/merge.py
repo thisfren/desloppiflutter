@@ -5,12 +5,19 @@ from __future__ import annotations
 import argparse
 from typing import Any, NamedTuple, TypedDict
 
-from desloppify import state as state_mod
 from desloppify.app.commands.helpers.query import write_query
-from desloppify.app.commands.helpers.queue_progress import show_score_with_plan_context
 from desloppify.app.commands.helpers.command_runtime import command_runtime
+from desloppify.app.commands.helpers.queue_progress import show_score_with_plan_context
 from desloppify.base.output.issues import issue_weight
 from desloppify.base.output.terminal import colorize
+from desloppify.engine._state.persistence import save_state
+from desloppify.engine._state.schema import StateModel, utc_now
+from desloppify.engine._state.schema_scores import (
+    get_objective_score,
+    get_overall_score,
+    get_strict_score,
+    get_verified_strict_score,
+)
 from desloppify.engine.work_queue import list_open_review_issues
 from desloppify.intelligence.narrative.core import NarrativeContext, compute_narrative
 from desloppify.intelligence.review.issue_merge import (
@@ -19,9 +26,6 @@ from desloppify.intelligence.review.issue_merge import (
     pick_longer_text,
     track_merged_from,
 )
-
-save_state = state_mod.save_state
-utc_now = state_mod.utc_now
 
 
 class ResolutionAttestationPayload(TypedDict, total=False):
@@ -65,12 +69,12 @@ class _ScoreSnapshot(NamedTuple):
     verified: float | None
 
 
-def _score_snapshot(state: state_mod.StateModel) -> _ScoreSnapshot:
+def _score_snapshot(state: StateModel) -> _ScoreSnapshot:
     return _ScoreSnapshot(
-        overall=state_mod.get_overall_score(state),
-        objective=state_mod.get_objective_score(state),
-        strict=state_mod.get_strict_score(state),
-        verified=state_mod.get_verified_strict_score(state),
+        overall=get_overall_score(state),
+        objective=get_objective_score(state),
+        strict=get_strict_score(state),
+        verified=get_verified_strict_score(state),
     )
 
 

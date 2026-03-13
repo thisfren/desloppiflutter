@@ -67,7 +67,7 @@ def run_claude_orchestrator(
     print("    - Check the dashboard between stages.")
     print("    - Observe subagent should use sub-subagents (one per dimension group).")
     print("    - Enrich subagent should use sub-subagents (one per cluster).")
-    print("    - Sense-check launches TWO parallel subagents (content + structure).")
+    print("    - Sense-check launches THREE subagents (content + structure + value).")
     print("    - If a stage fails validation, fix and re-record.")
 
 

@@ -12,8 +12,8 @@ from .shared import (
     ensure_stage_is_confirmable,
     finalize_stage_confirmation,
 )
-from ..observe_batches import observe_dimension_breakdown
 from ..services import TriageServices, default_triage_services
+from ..stages.records import TriageStages
 
 # Observe verdicts that trigger auto-skip on confirmation
 _AUTO_SKIP_VERDICTS = frozenset({"false positive", "exaggerated"})
@@ -29,6 +29,14 @@ def _find_referenced_names(text: str, names: list[str] | None) -> list[str]:
         name for name in names
         if name.lower().replace("_", " ") in text or name.lower() in text
     ]
+
+
+def _contains_any(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
+def _count_phrase_hits(text: str, phrases: tuple[str, ...]) -> int:
+    return sum(1 for phrase in phrases if phrase in text)
 
 
 def _validate_observe_attestation(text: str, dimensions: list[str] | None) -> str | None:
@@ -60,12 +68,34 @@ def _validate_cluster_attestation(
     *,
     cluster_names: list[str] | None,
     action: str,
+    stage: str,
 ) -> str | None:
     found = _find_referenced_names(text, cluster_names)
     if found or not cluster_names:
         return None
+    if stage == "organize":
+        if _contains_any(text, ("cluster", "clusters")) and _count_phrase_hits(
+            text,
+            ("priority", "priorities", "action step", "action steps", "description", "descriptions", "depends-on", "dependency", "dependencies", "issue", "issues", "consolidat"),
+        ) >= 2:
+            return None
+    elif stage == "enrich":
+        if _contains_any(text, ("step", "steps", "cluster", "clusters")) and _count_phrase_hits(
+            text,
+            ("executor-ready", "detail", "details", "file path", "file paths", "issue ref", "issue refs", "effort"),
+        ) >= 2:
+            return None
+    elif stage == "sense-check":
+        if _count_phrase_hits(
+            text,
+            ("content", "structure", "value", "cross-cluster", "dependency", "dependencies", "decision ledger", "enrich-level", "factually accurate"),
+        ) >= 2 and _contains_any(text, ("verified", "safe", "pass", "passes", "recorded", "checked")):
+            return None
     names = ", ".join(cluster_names[:6])
-    return f"Attestation must reference at least one cluster you {action}. Mention one of: {names}"
+    return (
+        f"Attestation must reference at least one cluster you {action}, or clearly describe the "
+        f"verified {stage} work product. Mention one of: {names}"
+    )
 
 
 def validate_attestation(
@@ -88,16 +118,19 @@ def validate_attestation(
             text,
             cluster_names=cluster_names,
             action="organized",
+            stage="organize",
         ),
         "enrich": lambda: _validate_cluster_attestation(
             text,
             cluster_names=cluster_names,
             action="enriched",
+            stage="enrich",
         ),
         "sense-check": lambda: _validate_cluster_attestation(
             text,
             cluster_names=cluster_names,
             action="sense-checked",
+            stage="sense-check",
         ),
     }
     validator = validators.get(stage)
@@ -186,7 +219,7 @@ def _undo_observe_auto_skips(plan: dict, meta: dict) -> int:
 def confirm_observe(
     args: argparse.Namespace,
     plan: dict,
-    stages: dict,
+    stages: TriageStages,
     attestation: str | None,
     *,
     services: TriageServices | None = None,
@@ -196,16 +229,14 @@ def confirm_observe(
     if not ensure_stage_is_confirmable(stages, stage="observe"):
         return
 
-    runtime = resolved_services.command_runtime(args)
-    si = resolved_services.collect_triage_input(plan, runtime.state)
     obs = stages["observe"]
 
-    print(colorize("  Stage: OBSERVE — Analyse issues & spot contradictions", "bold"))
+    print(colorize("  Stage: OBSERVE — Verify queued issues against the code", "bold"))
     print(colorize("  " + "─" * 54, "dim"))
 
-    by_dim, dim_names = observe_dimension_breakdown(si)
-
-    issue_count = obs.get("issue_count", len(si.open_issues))
+    by_dim = obs.get("dimension_counts", {})
+    dim_names = obs.get("dimension_names", sorted(by_dim))
+    issue_count = int(obs.get("issue_count", 0) or 0)
     print(f"  Your analysis covered {issue_count} issues across {len(by_dim)} dimensions:")
     for dim in dim_names:
         print(f"    {dim}: {by_dim[dim]} issues")
@@ -273,7 +304,8 @@ def confirm_reflect(
     print(colorize("  Stage: REFLECT — Form strategy & present to user", "bold"))
     print(colorize("  " + "─" * 50, "dim"))
 
-    recurring = resolved_services.detect_recurring_patterns(si.open_issues, si.resolved_issues)
+    review_issues = getattr(si, "review_issues", getattr(si, "open_issues", {}))
+    recurring = resolved_services.detect_recurring_patterns(review_issues, si.resolved_issues)
     if recurring:
         print(f"  Your strategy identified {len(recurring)} recurring dimension(s):")
         for dim, info in sorted(recurring.items()):
@@ -294,7 +326,8 @@ def confirm_reflect(
             print(colorize("  │ ...", "cyan"))
         print(colorize("  └" + "─" * 51 + "┘", "cyan"))
 
-    _by_dim, observe_dims = observe_dimension_breakdown(si)
+    observe_stage = stages.get("observe", {})
+    observe_dims = list(observe_stage.get("dimension_names", []))
     reflect_dims = sorted(set((list(recurring.keys()) if recurring else []) + observe_dims))
     reflect_clusters = [name for name in plan.get("clusters", {}) if not plan["clusters"][name].get("auto")]
 

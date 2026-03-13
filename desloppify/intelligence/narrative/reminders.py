@@ -45,7 +45,7 @@ def compute_reminders(
     strict_score = score_snapshot(state).strict
     reminder_history = state.get("reminder_history", {})
     scoped_issues = path_scoped_issues(
-        state.get("issues", {}), state.get("scan_path")
+        (state.get("work_items") or state.get("issues", {})), state.get("scan_path")
     )
     fp_rates = _compute_fp_rates(scoped_issues)
 

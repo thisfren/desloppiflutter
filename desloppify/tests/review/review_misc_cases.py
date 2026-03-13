@@ -235,7 +235,7 @@ class TestNarrativeIntegration:
             open_by_detector={"review": 3},
         )
         assert headline is not None
-        assert "review issue" in headline.lower()
+        assert "review work item" in headline.lower()
 
     def test_headline_no_review_in_early_momentum(self):
         headline = compute_headline(

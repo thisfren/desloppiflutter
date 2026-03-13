@@ -10,7 +10,7 @@ from desloppify.engine._state.schema import StateModel
 
 def _open_issues(state: StateModel) -> list[dict[str, Any]]:
     """Return all open issues from state."""
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     return [
         finding for finding in issues.values()
         if isinstance(finding, dict) and finding.get("status") == "open"

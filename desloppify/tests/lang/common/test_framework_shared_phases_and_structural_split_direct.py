@@ -89,10 +89,18 @@ def test_phase_security_records_default_coverage_when_missing(monkeypatch) -> No
         ),
     )
 
+    monkeypatch.setattr(review_mod, "filter_entries", lambda _zones, entries, _detector: entries)
     monkeypatch.setattr(
         review_mod,
-        "detect_security_issues",
-        lambda _files, _zones, _name, scan_root: (
+        "_entries_to_issues",
+        lambda detector, entries, **_kwargs: [{"detector": detector, "file": e["file"]} for e in entries],
+    )
+    monkeypatch.setattr(review_mod, "_log_phase_summary", lambda *_args, **_kwargs: None)
+
+    issues, potentials = review_mod.phase_security(
+        Path("."),
+        lang,
+        detect_security_issues=lambda _files, _zones, _name, scan_root: (
             [
                 {
                     "file": str(scan_root / "src" / "cross.py"),
@@ -105,15 +113,6 @@ def test_phase_security_records_default_coverage_when_missing(monkeypatch) -> No
             2,
         ),
     )
-    monkeypatch.setattr(review_mod, "filter_entries", lambda _zones, entries, _detector: entries)
-    monkeypatch.setattr(
-        review_mod,
-        "_entries_to_issues",
-        lambda detector, entries, **_kwargs: [{"detector": detector, "file": e["file"]} for e in entries],
-    )
-    monkeypatch.setattr(review_mod, "_log_phase_summary", lambda *_args, **_kwargs: None)
-
-    issues, potentials = review_mod.phase_security(Path("."), lang)
 
     assert len(issues) == 2
     assert potentials == {"security": 5}

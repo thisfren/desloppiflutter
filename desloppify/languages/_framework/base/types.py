@@ -17,6 +17,7 @@ from desloppify.languages._framework.base.lang_config_runtime import (
 from desloppify.languages._framework.base.types_shared import (
     BoundaryRule,
     CoverageStatus,
+    DetectorEntry,
     DetectorCoverageRecord,
     DetectorCoverageStatus,
     FixerConfig,
@@ -47,7 +48,7 @@ class DetectorPhase:
     """
 
     label: str
-    run: Callable[[Path, LangRuntimeContract], tuple[list[dict[str, Any]], dict[str, int]]]
+    run: Callable[[Path, LangRuntimeContract], tuple[list[DetectorEntry], dict[str, int]]]
     slow: bool = False
 
 
@@ -71,7 +72,9 @@ class LangRuntimeContract(Protocol):
     get_area: Callable[[str], str] | None
     build_dep_graph: DepGraphBuilder
     detect_lang_security_detailed: Callable[[list[str], FileZoneMap | None], LangSecurityResult]
-    detect_private_imports: Callable[[dict, FileZoneMap | None], tuple[list[dict], int]]
+    detect_private_imports: Callable[
+        [dict, FileZoneMap | None], tuple[list[DetectorEntry], int]
+    ]
     large_threshold: int
     complexity_threshold: int
     props_threshold: int
@@ -238,7 +241,7 @@ class LangConfig:
 
     def detect_private_imports(
         self, graph: dict, zone_map: FileZoneMap | None
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[DetectorEntry], int]:
         """Language-specific private-import detection. Override in subclasses."""
         return [], 0
 
@@ -251,6 +254,7 @@ __all__ = [
     "BoundaryRule",
     "CoverageStatus",
     "DepGraphBuilder",
+    "DetectorEntry",
     "DetectorCoverageRecord",
     "DetectorCoverageStatus",
     "DetectorPhase",

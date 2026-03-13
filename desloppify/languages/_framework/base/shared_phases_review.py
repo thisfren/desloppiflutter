@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from desloppify.base.discovery.file_paths import rel
 from desloppify.base.output.terminal import log
 from desloppify.engine.detectors.dupes import detect_duplicates
 from desloppify.engine.detectors.jscpd_adapter import detect_with_jscpd
-from desloppify.engine.detectors.security.detector import detect_security_issues
+from desloppify.engine.detectors.security.detector import (
+    detect_security_issues as _detect_security_issues_default,
+)
 from desloppify.engine.detectors.test_coverage.detector import detect_test_coverage
 from desloppify.engine._state.filtering import make_issue
 from desloppify.engine.policy.zones import EXCLUDED_ZONES, filter_entries
-from desloppify.languages._framework.base.types import LangRuntimeContract
+from desloppify.languages._framework.base.types import DetectorEntry, LangRuntimeContract
 from desloppify.languages._framework.issue_factories import make_dupe_issues
 from desloppify.state_io import Issue
 
@@ -23,6 +26,10 @@ from .shared_phases_helpers import (
     _log_phase_summary,
     _record_detector_coverage,
 )
+
+# Compatibility export for language phase modules that still import the raw
+# security detector symbol from this module.
+detect_security_issues = _detect_security_issues_default
 
 
 def phase_dupes(path: Path, lang: LangRuntimeContract) -> tuple[list[Issue], dict[str, int]]:
@@ -90,7 +97,14 @@ def phase_boilerplate_duplication(
     return issues, {"boilerplate_duplication": distinct_files}
 
 
-def phase_security(path: Path, lang: LangRuntimeContract) -> tuple[list[Issue], dict[str, int]]:
+def phase_security(
+    path: Path,
+    lang: LangRuntimeContract,
+    *,
+    detect_security_issues: Callable[..., tuple[list[DetectorEntry], int]] = (
+        _detect_security_issues_default
+    ),
+) -> tuple[list[Issue], dict[str, int]]:
     """Shared phase: detect security issues (cross-language + lang-specific)."""
     zone_map = lang.zone_map
     files = lang.file_finder(path) if lang.file_finder else []

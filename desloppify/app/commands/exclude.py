@@ -30,9 +30,11 @@ def _state_file_for_runtime(runtime) -> Path:
 
 def _prune_excluded_issues(state: dict, pattern: str) -> list[str]:
     """Drop issues whose file path matches a new exclusion pattern."""
-    issues = state.get("issues")
+    issues = state.get("work_items") or state.get("issues")
     if not isinstance(issues, dict):
         return []
+    state["work_items"] = issues
+    state["issues"] = issues
 
     removed_ids = [
         issue_id
@@ -62,6 +64,11 @@ def cmd_exclude(args: argparse.Namespace) -> None:
     runtime = command_runtime(args)
     config = runtime.config
     state = runtime.state
+    if isinstance(state, dict):
+        issues = state.get("work_items") or state.get("issues")
+        if isinstance(issues, dict):
+            state["work_items"] = issues
+            state["issues"] = issues
     state_file = _state_file_for_runtime(runtime)
 
     config_mod.add_exclude_pattern(config, args.pattern)

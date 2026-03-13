@@ -41,7 +41,7 @@ arch: install-ci-tools
 
 ci-contracts: install-ci-tools
 	pytest -q desloppify/tests/ci/test_ci_contracts.py
-	pytest -q desloppify/tests/commands/test_lifecycle_transitions.py -k "subjective_then_score_then_triage"
+	pytest -q desloppify/tests/commands/test_lifecycle_transitions.py -k "assessment_then_score_when_no_review_followup"
 
 integration-roslyn: install-ci-tools
 	pytest -q desloppify/tests/lang/csharp/test_csharp_deps.py -k "roslyn"

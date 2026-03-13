@@ -422,7 +422,7 @@ def build_subjective_followup(
 
 
 def _subjective_coverage_global(state: dict) -> int:
-    all_issues = state.get("issues", {})
+    all_issues = (state.get("work_items") or state.get("issues", {}))
     if not isinstance(all_issues, dict):
         all_issues = {}
     coverage_global, _reason_counts, _holistic_reasons = (

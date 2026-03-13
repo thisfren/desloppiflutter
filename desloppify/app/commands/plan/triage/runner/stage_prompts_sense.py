@@ -36,7 +36,11 @@ def _sense_check_fix_list() -> str:
         "   asking a single question? If not:\n"
         "   - Replace \"refactor X\" with the specific transformation\n"
         "   - Replace \"update imports\" with the specific file list\n"
-        "   - Replace \"extract into new hook\" with the filename, function signature, return type\n"
+        "   - Replace \"extract into new hook\" with the existing package/directory surface,\n"
+        "     function signature, and return type\n"
+        "   - ONLY reference file paths that already exist on disk\n"
+        "   - If a new file is warranted, name the existing parent directory or package and\n"
+        "     describe the new module generically; do NOT invent a future filename\n"
         "6. EFFORT TAGS: Does the tag match the actual scope? A one-line rename is \"trivial\",\n"
         "   not \"small\". Decomposing a 400-line file is \"large\", not \"medium\".\n"
         "7. DUPLICATES: If you notice this step does the same thing as a step in another\n"
@@ -85,6 +89,8 @@ def _sense_check_content_not_to_do(mode: str) -> str:
             "- Do NOT reorder steps (the structure subagent handles that)\n"
             "- Do NOT add --depends-on (the structure subagent handles that)\n"
             "- Do NOT add new steps for missing cascade updates (the structure subagent handles that)\n"
+            "- Do NOT introduce speculative future file or directory paths into step detail text\n"
+            "- Do NOT name a concrete new file unless it already exists on disk\n"
             "- Do NOT modify any cluster other than the one assigned in this prompt\n"
             "- Do NOT run triage stage commands (`plan triage --stage ...`)\n"
             "- Do NOT debug or repair the CLI / environment\n"
@@ -94,6 +100,8 @@ def _sense_check_content_not_to_do(mode: str) -> str:
         "- Do NOT reorder steps (the structure subagent handles that)\n"
         "- Do NOT add --depends-on (the structure subagent handles that)\n"
         "- Do NOT add new steps for missing cascade updates (the structure subagent handles that)\n"
+        "- Do NOT invent future file or directory paths when rewriting steps\n"
+        "- Do NOT name a concrete new file unless it already exists on disk\n"
         "- Do NOT run any `desloppify` commands\n"
         "- Do NOT debug or repair the CLI / environment\n"
     )
@@ -145,6 +153,7 @@ def _sense_check_structure_not_to_do(mode: str) -> str:
             "- Do NOT modify existing step detail text (content subagents handled that)\n"
             "- Do NOT change effort tags on existing steps\n"
             "- Do NOT remove existing steps\n"
+            "- Do NOT add cascade steps that point at speculative future files; reference only existing files\n"
             "- Do NOT run triage stage commands (`plan triage --stage ...`)\n"
             "- Do NOT debug or repair the CLI / environment\n"
         )
@@ -153,6 +162,7 @@ def _sense_check_structure_not_to_do(mode: str) -> str:
         "- Do NOT modify step detail text (the content subagent handles that)\n"
         "- Do NOT change effort tags (the content subagent handles that)\n"
         "- Do NOT remove steps or deduplicate (the content subagent handles that)\n"
+        "- Do NOT add cascade steps that point at speculative future files\n"
         "- Do NOT run any `desloppify` commands\n"
         "- Do NOT debug or repair the CLI / environment\n"
     )
@@ -287,7 +297,124 @@ def build_sense_check_structure_prompt(
     return "\n\n".join(parts)
 
 
+def build_sense_check_value_prompt(
+    *,
+    plan: dict,
+    state: dict | None,
+    repo_root: Path,
+    mode: str = "self_record",
+    cli_command: str = "desloppify",
+) -> str:
+    """Build a value-check prompt for the YAGNI/KISS pass as sense-check's 3rd subagent."""
+    from ..stages.helpers import value_check_targets
+
+    targets = value_check_targets(plan, state)
+    clusters = {name: c for name, c in plan.get("clusters", {}).items() if not c.get("auto")}
+
+    parts: list[str] = []
+    parts.append(
+        "You are running the VALUE CHECK pass as part of sense-check.\n"
+        f"Repo root: {repo_root}\n\n"
+        f"Live queue targets: {len(targets)}"
+    )
+
+    job = (
+        "## Your job\n"
+        "Walk every live queue target and make the final YAGNI/KISS judgment.\n"
+        "Ask: does doing this make the codebase genuinely better? Beauty is a valid\n"
+        "reason to keep work, but not if it buys that beauty with new indirection,\n"
+        "wrappers, abstraction layers, or confusion.\n"
+    )
+    parts.append(job)
+
+    rubric = (
+        "## Rubric\n"
+        "For EVERY live queue target, choose exactly one:\n"
+        "1. `keep` — clearly improves correctness, clarity, cohesion, simplicity, or elegance\n"
+        "2. `tighten` — worth doing, but the plan must be simplified or made more concrete first\n"
+        "3. `skip` — the fix would add churn, indirection, coordination, or abstraction for too little gain\n\n"
+        "What should usually be skipped:\n"
+        "- facade pruning that just spreads imports\n"
+        "- abstraction-for-abstraction's-sake\n"
+        "- tiny theoretical cleanups that make the code harder to follow\n"
+        "- fixes whose implementation is more complicated than the current code\n\n"
+        "What can still be worth keeping:\n"
+        "- simplifications that delete layers or reduce branching\n"
+        "- aesthetic cleanups that genuinely improve readability without adding machinery\n"
+        "- focused unifications that make naming or flow more coherent with less confusion\n"
+    )
+    parts.append(rubric)
+
+    if mode == "self_record":
+        commands = (
+            "## Commands\n"
+            f"Use the exact CLI prefix: `{cli_command}`\n"
+            f"- `{cli_command} next --count 100` to inspect the current execution queue\n"
+            f"- `{cli_command} plan cluster show <name>` to inspect cluster members and steps\n"
+            f"- `{cli_command} show <issue-id-or-hash> --no-budget` to re-read the underlying finding\n"
+            f"- `{cli_command} plan cluster update <name> --update-step N --detail \"...\" --effort small`\n"
+            f'- `{cli_command} plan skip --permanent <pattern> --note "<why>"'
+            ' --attest "I have reviewed this triage skip against the code and I am not gaming the score'
+            ' by suppressing a real defect."`\n'
+            f"- `{cli_command} plan cluster delete <name>` if you skipped everything it contained\n"
+        )
+        parts.append(commands)
+    else:
+        parts.append(
+            "## Output contract\n"
+            "State the exact queue items to keep, tighten, or skip, plus any cluster-step\n"
+            "updates or deletions needed. The orchestrator will apply them.\n"
+        )
+
+    process = (
+        "## Required process\n"
+        "1. Re-read the actual code behind each queue target.\n"
+        "2. Apply the rubric above, not the raw issue title.\n"
+        "3. Tighten any keeper whose steps are too vague, too broad, or too complicated.\n"
+        "4. Permanently skip anything that fails the value test.\n"
+        "5. Delete dead clusters after skipping all their members.\n"
+    )
+    parts.append(process)
+
+    # Include targets
+    parts.append("## Live Queue Targets\n")
+    for target in targets:
+        if target in clusters:
+            cluster = clusters[target]
+            steps = cluster.get("action_steps", [])
+            parts.append(f"- **{target}** ({len(steps)} steps)")
+        else:
+            parts.append(f"- {target}")
+
+    # Include cluster details
+    if clusters:
+        parts.append("\n## Cluster Details\n")
+        for name, cluster in sorted(clusters.items()):
+            steps = cluster.get("action_steps", [])
+            issues = cluster_issue_ids(cluster)
+            parts.append(f"### {name} ({len(steps)} steps, {len(issues)} issues)")
+            for i, step in enumerate(steps, 1):
+                parts.append(_format_cluster_step(i, step))
+
+    output_section = (
+        "\n## Output\n"
+        "Start with a `## Decision Ledger` section:\n"
+        "```\n"
+        "## Decision Ledger\n"
+        "- cluster-or-id -> keep\n"
+        "- cluster-or-id -> tighten\n"
+        "- cluster-or-id -> skip\n"
+        "```\n"
+        "Then add short sections explaining the reasoning, with concrete file references.\n"
+        "Cover every live queue target exactly once in the ledger.\n"
+    )
+    parts.append(output_section)
+
+    return "\n\n".join(parts)
+
+
 __all__ = [
     "build_sense_check_content_prompt",
     "build_sense_check_structure_prompt",
+    "build_sense_check_value_prompt",
 ]

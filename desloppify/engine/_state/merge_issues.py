@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
 from desloppify.base.discovery.file_paths import matches_exclusion
 from desloppify.engine._state.filtering import matched_ignore_pattern
+from desloppify.engine._state.issue_semantics import (
+    is_import_only_issue,
+    is_assessment_request,
+)
 
 
 def find_suspect_detectors(
@@ -25,14 +31,14 @@ def find_suspect_detectors(
             previous_open_by_detector.get(detector, 0) + 1
         )
 
-    # 'review' issues enter via `desloppify review --import`, not via scan phases.
-    # They are always suspect so the scan never auto-resolves them — regardless
-    # of current issue status (open, wontfix, etc.).
-    import_only_detectors = {"review"}
-    suspect: set[str] = set(import_only_detectors)
+    suspect: set[str] = {
+        str(issue.get("detector", "unknown"))
+        for issue in existing.values()
+        if isinstance(issue, dict) and is_import_only_issue(issue)
+    }
 
     for detector, previous_count in previous_open_by_detector.items():
-        if detector in import_only_detectors:
+        if detector in suspect:
             continue
         if current_by_detector.get(detector, 0) > 0:
             continue
@@ -76,13 +82,15 @@ def verify_disappeared(
     lang: str | None,
     scan_path: str | None,
     exclude: tuple[str, ...] = (),
+    project_root: str | None = None,
 ) -> tuple[int, int, int, set[str]]:
     """Update scan corroboration for issues absent from scan.
 
     Returns (resolved_count, skipped_other_lang, resolved_out_of_scope, changed_detectors).
     Queue-tracked work stays user-controlled: disappearing from scan does not
-    change an open issue to resolved. Manually resolved items can be marked as
-    scan-verified when they remain absent.
+    change an open issue to resolved — *unless* the source file no longer exists
+    on disk, in which case the issue is auto-resolved.  Manually resolved items
+    can be marked as scan-verified when they remain absent.
     """
     resolved = skipped_other_lang = resolved_out_of_scope = 0
     resolved_detectors: set[str] = set()
@@ -130,6 +138,21 @@ def verify_disappeared(
             continue
 
         if previous_status == "open":
+            # If the source file no longer exists on disk, auto-resolve:
+            # the issue cannot be actionable for a deleted file.
+            file_path = previous.get("file", "")
+            file_deleted = False
+            if project_root and file_path and file_path != ".":
+                file_deleted = not os.path.exists(
+                    os.path.join(project_root, file_path)
+                )
+            if not file_deleted:
+                continue
+            previous["status"] = "auto_resolved"
+            previous["resolved_at"] = now
+            previous["note"] = "Auto-resolved: source file no longer exists"
+            resolved_detectors.add(previous.get("detector", "unknown"))
+            resolved += 1
             continue
 
         verification_note = (
@@ -213,11 +236,11 @@ def upsert_issues(
         previous["suppression_pattern"] = None
 
         if previous["status"] in ("fixed", "auto_resolved", "false_positive"):
-            # subjective_review issues are condition-based.  When just
+            # Review-request issues are condition-based. When just
             # completed by an agent import, skip reopening to avoid a
             # resolve-then-reopen loop on the same scan cycle.
             if (
-                detector == "subjective_review"
+                is_assessment_request(previous)
                 and previous["status"] in {"fixed", "auto_resolved"}
                 and (previous.get("resolution_attestation") or {}).get("kind") == "agent_import"
             ):

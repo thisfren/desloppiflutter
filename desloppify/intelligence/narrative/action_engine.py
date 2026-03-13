@@ -75,7 +75,7 @@ def _fixer_has_applicable_issues(
         and not issue.get("suppressed")
         and issue.get("detector") == "smells"
         and issue.get("detail", {}).get("smell_id") == smell_id
-        for issue in state.get("issues", {}).values()
+        for issue in (state.get("work_items") or state.get("issues", {})).values()
     )
 
 

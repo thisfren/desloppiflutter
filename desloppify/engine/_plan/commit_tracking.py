@@ -137,7 +137,7 @@ def commit_tracking_summary(plan: dict[str, Any]) -> dict[str, int]:
 
 def _issue_summary(state: StateModel, issue_id: str) -> str:
     """Extract a short summary for a issue ID from state."""
-    issue = state.get("issues", {}).get(issue_id, {})
+    issue = (state.get("work_items") or state.get("issues", {})).get(issue_id, {})
     summary = issue.get("summary", "")
     if summary:
         return summary[:80]

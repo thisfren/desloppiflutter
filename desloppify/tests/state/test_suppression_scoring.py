@@ -163,7 +163,7 @@ class TestRemoveIgnoredPreservesStatus:
         state = _minimal_state(issues)
         removed = remove_ignored_issues(state, "src/a.ts")
         assert removed == 1
-        f = state["issues"]["unused::src/a.ts::foo"]
+        f = state["work_items"]["unused::src/a.ts::foo"]
         assert f["suppressed"] is True
         assert f["status"] == "fixed"  # NOT reopened to "open"
 
@@ -177,7 +177,7 @@ class TestRemoveIgnoredPreservesStatus:
         }
         state = _minimal_state(issues)
         remove_ignored_issues(state, "src/a.ts")
-        f = state["issues"]["unused::src/a.ts::bar"]
+        f = state["work_items"]["unused::src/a.ts::bar"]
         assert f["suppressed"] is True
         assert f["status"] == "auto_resolved"
 
@@ -191,7 +191,7 @@ class TestRemoveIgnoredPreservesStatus:
         }
         state = _minimal_state(issues)
         remove_ignored_issues(state, "src/a.ts")
-        f = state["issues"]["unused::src/a.ts::baz"]
+        f = state["work_items"]["unused::src/a.ts::baz"]
         assert f["suppressed"] is True
         assert f["status"] == "false_positive"
 
@@ -218,15 +218,15 @@ class TestRemoveIgnoredPreservesStatus:
         removed_worktrees = remove_ignored_issues(state, ".claude/worktrees")
         assert removed_worktrees == 1
         assert (
-            state["issues"]["security::.claude/worktrees/a/file.py::b101"]["suppressed"]
+            state["work_items"]["security::.claude/worktrees/a/file.py::b101"]["suppressed"]
             is True
         )
-        assert state["issues"]["security::.claude/file.py::b101"]["suppressed"] is False
+        assert state["work_items"]["security::.claude/file.py::b101"]["suppressed"] is False
 
         removed_claude = remove_ignored_issues(state, ".claude")
         assert removed_claude == 2
-        assert state["issues"]["security::.claude/file.py::b101"]["suppressed"] is True
-        assert state["issues"]["security::src/app.py::b101"]["suppressed"] is False
+        assert state["work_items"]["security::.claude/file.py::b101"]["suppressed"] is True
+        assert state["work_items"]["security::src/app.py::b101"]["suppressed"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -295,21 +295,21 @@ class TestIgnoreDoesNotCorruptScore:
         # Simulate ignore: suppress the issue
         remove_ignored_issues(state, "src/a.ts")
 
-        f = state["issues"]["unused::src/a.ts::foo"]
+        f = state["work_items"]["unused::src/a.ts::foo"]
         assert f["suppressed"] is True
         assert f["status"] == "fixed"  # preserved
 
         # _count_issues should not see it
-        counters, _ = _count_issues(state["issues"])
+        counters, _ = _count_issues(state["work_items"])
         assert counters.get("open", 0) == 0
         assert counters.get("fixed", 0) == 0  # suppressed => invisible
 
         # _iter_scoring_candidates should not yield it
         candidates = list(
-            _iter_scoring_candidates("unused", state["issues"], frozenset())
+            _iter_scoring_candidates("unused", state["work_items"], frozenset())
         )
         assert candidates == []
 
         # open_scope_breakdown should not count it
-        breakdown = open_scope_breakdown(state["issues"], ".")
+        breakdown = open_scope_breakdown(state["work_items"], ".")
         assert breakdown["global"] == 0

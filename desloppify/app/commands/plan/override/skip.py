@@ -14,7 +14,7 @@ from desloppify.app.commands.helpers.attestation import (
 )
 from desloppify.app.commands.helpers.command_runtime import command_runtime
 from desloppify.app.commands.helpers.state import require_issue_inventory
-from desloppify.app.commands.plan.override_io import (
+from .io import (
     _plan_file_for_state,
     save_plan_state_transactional,
 )
@@ -245,7 +245,7 @@ def cmd_plan_skip(args: argparse.Namespace) -> None:
         note=note,
         detail={"kind": kind, "reason": reason},
     )
-    clear_postflight_scan_completion(plan, issue_ids=issue_ids)
+    clear_postflight_scan_completion(plan, issue_ids=issue_ids, state=state)
     _save_skip_plan_state(
         plan=plan,
         plan_file=plan_file,
@@ -304,7 +304,7 @@ def cmd_plan_unskip(args: argparse.Namespace) -> None:
         actor="user",
         detail={"need_reopen": need_reopen},
     )
-    clear_postflight_scan_completion(plan, issue_ids=unskipped_ids)
+    clear_postflight_scan_completion(plan, issue_ids=unskipped_ids, state=state)
 
     reopened: list[str] = []
     if need_reopen:
@@ -358,7 +358,7 @@ def cmd_plan_backlog(args: argparse.Namespace) -> None:
     # so they don't get stranded with a non-open status while untracked by plan.
     _BACKLOG_REOPEN_STATUSES = {"deferred", "triaged_out"}
     state_data = state_mod.load_state(state_file)
-    issues = state_data.get("issues", {})
+    issues = state_data.get("work_items", {})
     reopen_ids = [
         fid for fid in removed
         if issues.get(fid, {}).get("status") in _BACKLOG_REOPEN_STATUSES
@@ -374,7 +374,7 @@ def cmd_plan_backlog(args: argparse.Namespace) -> None:
         issue_ids=removed,
         actor="user",
     )
-    clear_postflight_scan_completion(plan, issue_ids=removed)
+    clear_postflight_scan_completion(plan, issue_ids=removed, state=state_data)
 
     if reopen_ids:
         save_plan_state_transactional(

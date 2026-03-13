@@ -19,6 +19,9 @@ TRIAGE_STAGE_IDS = (
     "triage::sense-check",
     "triage::commit",
 )
+# value-check was folded into sense-check as a subagent in v0.9.9.
+# Old plan.json files may still contain triage_stages["value-check"] data;
+# it is silently ignored because _TRIAGE_STAGE_NAMES no longer includes it.
 TRIAGE_STAGE_SPECS = tuple(
     (stage_id.removeprefix("triage::"), stage_id) for stage_id in TRIAGE_STAGE_IDS
 )
@@ -53,6 +56,21 @@ WORKFLOW_PRIORITY_ORDER = (
     WORKFLOW_CREATE_PLAN_ID,
 )
 SYNTHETIC_PREFIXES = ("triage::", "workflow::", "subjective::")
+
+
+def is_synthetic_id(issue_id: str) -> bool:
+    """Return True when a raw plan ID refers to synthetic queue work."""
+    return any(issue_id.startswith(prefix) for prefix in SYNTHETIC_PREFIXES)
+
+
+def is_workflow_id(issue_id: str) -> bool:
+    """Return True when a raw plan ID is a workflow synthetic."""
+    return issue_id.startswith(WORKFLOW_PREFIX)
+
+
+def is_triage_id(issue_id: str) -> bool:
+    """Return True when a raw plan ID is a triage synthetic."""
+    return issue_id.startswith(TRIAGE_PREFIX)
 
 
 @dataclass
@@ -134,6 +152,9 @@ __all__ = [
     "QueueSyncResult",
     "normalize_queue_workflow_and_triage_prefix",
     "confirmed_triage_stage_names",
+    "is_synthetic_id",
+    "is_triage_id",
+    "is_workflow_id",
     "recorded_unconfirmed_triage_stage_names",
     "SUBJECTIVE_PREFIX",
     "SYNTHETIC_PREFIXES",

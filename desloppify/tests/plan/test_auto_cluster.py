@@ -6,6 +6,10 @@ from desloppify.engine._plan.auto_cluster import (
     _repair_ghost_cluster_refs,
     auto_cluster_issues,
 )
+from desloppify.engine._plan.cluster_semantics import (
+    EXECUTION_POLICY_EPHEMERAL_AUTOPROMOTE,
+    EXECUTION_POLICY_PLANNED_ONLY,
+)
 from desloppify.engine._plan.cluster_strategy import (
     cluster_name_from_key,
     grouping_key,
@@ -50,7 +54,7 @@ def _state_with(*issues: dict) -> dict:
     fmap = {}
     for f in issues:
         fmap[f["id"]] = f
-    return {"issues": fmap, "scan_count": 5}
+    return {"work_items": fmap, "issues": fmap, "scan_count": 5}
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +138,8 @@ def test_auto_cluster_creates_cluster_from_issues():
     assert cluster["auto"] is True
     assert set(cluster["issue_ids"]) == {"u1", "u2", "u3"}
     assert cluster["action"] is not None  # should have fix command
+    assert cluster["action_type"] == "auto_fix"
+    assert cluster["execution_policy"] == EXECUTION_POLICY_EPHEMERAL_AUTOPROMOTE
 
 
 def test_auto_cluster_skips_singletons():
@@ -244,6 +250,26 @@ def test_remove_from_cluster_clears_focus_when_cluster_becomes_non_actionable():
     assert removed == 1
     assert plan["clusters"]["manual/cleanup"]["issue_ids"] == []
     assert plan["active_cluster"] is None
+
+
+def test_remove_from_cluster_also_clears_step_issue_refs():
+    plan = empty_plan()
+    ensure_plan_defaults(plan)
+    create_cluster(plan, "manual/cleanup")
+    add_to_cluster(plan, "manual/cleanup", ["u1", "u2"])
+    plan["clusters"]["manual/cleanup"]["action_steps"] = [
+        {"title": "Fix first issue", "issue_refs": ["u1"]},
+        {"title": "Fix both issues", "issue_refs": ["u1", "u2"]},
+        {"title": "Keep second issue", "issue_refs": ["u2"]},
+    ]
+
+    removed = remove_from_cluster(plan, "manual/cleanup", ["u1"])
+
+    assert removed == 1
+    assert plan["clusters"]["manual/cleanup"]["issue_ids"] == ["u2"]
+    assert plan["clusters"]["manual/cleanup"]["action_steps"][0]["issue_refs"] == []
+    assert plan["clusters"]["manual/cleanup"]["action_steps"][1]["issue_refs"] == ["u2"]
+    assert plan["clusters"]["manual/cleanup"]["action_steps"][2]["issue_refs"] == ["u2"]
 
 
 def test_auto_cluster_deletes_stale():
@@ -385,7 +411,25 @@ def test_ensure_plan_defaults_adds_cluster_fields():
     assert cluster["auto"] is False
     assert cluster["cluster_key"] == ""
     assert cluster["action"] is None
+    assert cluster["action_type"] == "manual_fix"
+    assert cluster["execution_policy"] == EXECUTION_POLICY_PLANNED_ONLY
     assert cluster["user_modified"] is False
+
+
+def test_ensure_plan_defaults_backfills_legacy_autofix_cluster_semantics():
+    plan = empty_plan()
+    plan["clusters"]["auto/unused"] = {
+        "name": "auto/unused",
+        "auto": True,
+        "issue_ids": ["u1"],
+        "action": "desloppify autofix unused-imports --dry-run",
+    }
+
+    ensure_plan_defaults(plan)
+
+    cluster = plan["clusters"]["auto/unused"]
+    assert cluster["action_type"] == "auto_fix"
+    assert cluster["execution_policy"] == EXECUTION_POLICY_EPHEMERAL_AUTOPROMOTE
 
 
 # ---------------------------------------------------------------------------
@@ -1150,7 +1194,7 @@ def test_judgment_required_issues_still_in_state():
 
     auto_cluster_issues(plan, state)
     # smells issues still exist in state
-    assert "s1" in state["issues"]
-    assert "s2" in state["issues"]
+    assert "s1" in state["work_items"]
+    assert "s2" in state["work_items"]
     # unused auto-clusters normally
     assert "auto/unused" in plan["clusters"]

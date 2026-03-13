@@ -150,12 +150,17 @@ _CLI_REFERENCE_TEMPLATE = """\
 ```
 {cli_command} plan cluster create <name> --description "<what this cluster addresses>"
 {cli_command} plan cluster add <name> <issue-patterns...>
+{cli_command} plan cluster remove <name> <issue-patterns...>
 {cli_command} plan cluster update <name> --description "<desc>" --steps "step 1" "step 2"
 {cli_command} plan cluster update <name> --add-step "<title>" --detail "<sub-points>" --effort small --issue-refs <id1> <id2>
 {cli_command} plan cluster update <name> --update-step N --detail "<sub-points>" --effort medium --issue-refs <id1>
 {cli_command} plan cluster update <name> --depends-on <other-cluster-name>
+{cli_command} plan cluster delete <name>
 {cli_command} plan cluster show <name>
 {cli_command} plan cluster list --verbose
+{cli_command} plan promote <pattern>
+{cli_command} plan promote <pattern> top
+{cli_command} plan promote <pattern> before -t <target>
 ```
 
 ### Skip/dismiss
@@ -169,6 +174,7 @@ Every review issue in the active triage run must end up either in a manual clust
 ```
 {cli_command} show <issue-id-or-pattern> --no-budget    # full issue detail with suggestion
 {cli_command} show review --status open --no-budget     # all open review issues
+{cli_command} backlog --count 20                        # inspect backlog-only detector work
 ```
 
 ### Effort tags

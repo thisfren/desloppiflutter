@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from desloppify import state as state_mod
+from desloppify.engine._state.schema import utc_now
 from desloppify.intelligence.review.dimensions import normalize_dimension_name
 from desloppify.intelligence.review.importing.contracts_types import (
     NormalizedReviewImportPayload,
@@ -97,7 +97,7 @@ def mark_manual_override_assessments_provisional(
     if not isinstance(store, dict):
         return 0
 
-    now = state_mod.utc_now()
+    now = utc_now()
     expires_scan = int(state.get("scan_count", 0) or 0) + 1
     marked = 0
     for key in sorted(assessment_keys):

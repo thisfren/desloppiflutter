@@ -63,7 +63,7 @@ def _cluster_item(
 def _workflow_stage_item(
     *,
     id: str = "triage::observe",
-    summary: str = "Observe patterns in review issues",
+    summary: str = "Observe patterns in review work items",
     stage_name: str = "observe",
     is_blocked: bool = False,
     blocked_by: list[str] | None = None,
@@ -272,8 +272,9 @@ def test_render_auto_fix_type_label(monkeypatch, capsys) -> None:
     monkeypatch.setattr(render_mod, "colorize", lambda t, _s: t)
 
     item = _issue_item(
-        primary_command="desloppify autofix unused_import --dry-run",
+        primary_command='desloppify plan resolve "unused_import::a" --note "done" --confirm',
         detector="unused_import",
+        action_type="auto_fix",
     )
     render_mod.render_terminal_items(
         [item], {}, {}, group="item", explain=False,
@@ -431,7 +432,7 @@ def test_render_workflow_stage_with_review_issues(monkeypatch, capsys) -> None:
         [item], {}, {}, group="item", explain=False,
     )
     out = capsys.readouterr().out
-    assert "12 review issues" in out
+    assert "12 review work items" in out
 
 
 def test_render_workflow_action(monkeypatch, capsys) -> None:

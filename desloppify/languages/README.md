@@ -1,6 +1,6 @@
 # Languages
 
-Desloppify supports 28 languages through a plugin system with two tiers: **full plugins** (7) with hand-written detectors and subjective review, and **generic plugins** (21) that wrap external linters and optionally use tree-sitter for AST analysis.
+Desloppify supports 29 languages through a plugin system with two tiers: **full plugins** (8) with hand-written detectors and subjective review, and **generic plugins** (21) that wrap external linters and optionally use tree-sitter for AST analysis.
 
 ## Full Plugins
 
@@ -47,6 +47,7 @@ These are single-file plugins (~20-40 lines) that call `generic_lang()` with ext
 | Erlang | `erlang/` | dialyzer | functions, imports |
 | OCaml | `ocaml/` | ocaml compiler | functions, modules, imports |
 | F# | `fsharp/` | dotnet build | functions, imports |
+| Julia | `julia/` | JuliaFormatter | functions, imports |
 
 Example: `ruby/__init__.py` — wraps rubocop and tree-sitter import/function support as a generic plugin.
 

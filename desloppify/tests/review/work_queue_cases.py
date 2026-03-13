@@ -33,8 +33,10 @@ def _issue(
 
 
 def _state(issues: list[dict], *, dimension_scores: dict | None = None) -> dict:
+    work_items = {f["id"]: f for f in issues}
     return {
-        "issues": {f["id"]: f for f in issues},
+        "work_items": work_items,
+        "issues": work_items,
         "dimension_scores": dimension_scores or {},
     }
 
@@ -230,12 +232,10 @@ def test_subjective_item_uses_show_review_when_matching_review_issues_exist():
     queue = build_work_queue(
         state, count=None, include_subjective=True, subjective_threshold=95
     )
-    subj = next(
-        item for item in queue["items"] if item["kind"] == "subjective_dimension"
-    )
-    assert subj["id"] == "subjective::mid_level_elegance"
-    assert subj["primary_command"] == "desloppify show review --status open"
-    assert subj["detail"]["open_review_issues"] == 1
+    item = queue["items"][0]
+    assert item["id"] == "review::.::holistic::mid_level_elegance::split"
+    assert item["kind"] == "issue"
+    assert all(entry["kind"] != "subjective_dimension" for entry in queue["items"])
 
 
 def test_stale_subjective_item_uses_show_review_when_matching_review_issues_exist():
@@ -272,12 +272,10 @@ def test_stale_subjective_item_uses_show_review_when_matching_review_issues_exis
     queue = build_work_queue(
         state, count=None, include_subjective=True, subjective_threshold=95
     )
-    subj = next(
-        item for item in queue["items"] if item["kind"] == "subjective_dimension"
-    )
-    assert "[stale — re-review]" in subj["summary"]
-    assert subj["primary_command"] == "desloppify show review --status open"
-    assert subj["detail"]["open_review_issues"] == 1
+    item = queue["items"][0]
+    assert item["id"] == "review::.::holistic::initialization_coupling::abc12345"
+    assert item["kind"] == "issue"
+    assert all(entry["kind"] != "subjective_dimension" for entry in queue["items"])
 
 
 def test_unassessed_subjective_item_points_to_holistic_refresh():
@@ -604,6 +602,48 @@ def test_stale_subjective_appear_when_no_objective_backlog():
     assert "subjective::naming_quality" in ids
 
 
+def test_under_target_subjective_appear_when_no_objective_backlog():
+    """Current below-target dimensions surface alongside stale review work."""
+    state = _state(
+        [],
+        dimension_scores={
+            "Naming quality": {
+                "score": 70.0,
+                "strict": 70.0,
+                "failing": 1,
+                "detectors": {
+                    "subjective_assessment": {"dimension_key": "naming_quality"},
+                },
+            },
+            "Design coherence": {
+                "score": 68.0,
+                "strict": 68.0,
+                "failing": 1,
+                "detectors": {
+                    "subjective_assessment": {"dimension_key": "design_coherence"},
+                },
+                "stale": True,
+            },
+        },
+    )
+    state["subjective_assessments"] = {
+        "naming_quality": {
+            "score": 70.0,
+            "needs_review_refresh": False,
+        },
+        "design_coherence": {
+            "score": 68.0,
+            "needs_review_refresh": True,
+            "stale_since": "2026-01-01T00:00:00+00:00",
+        },
+    }
+
+    queue = build_work_queue(state, count=None, include_subjective=True)
+    ids = {item["id"] for item in queue["items"]}
+
+    assert all(fid.startswith("subjective::") for fid in ids)
+
+
 def test_unassessed_subjective_visible_with_objective_backlog():
     """When initial reviews exist, only they are shown — objective items hidden.
 
@@ -772,7 +812,7 @@ def test_evidence_only_issue_still_in_state():
     issues = [_issue("props::src/a.tsx::big", detector="props", confidence="low")]
     state = _state(issues)
     # Issue exists in state
-    assert "props::src/a.tsx::big" in state["issues"]
+    assert "props::src/a.tsx::big" in state["work_items"]
     # But not in queue
     queue = build_work_queue(state, count=None, include_subjective=False)
     assert len(queue["items"]) == 0

@@ -24,34 +24,24 @@ def _clean_judgment(raw: dict[str, Any]) -> dict[str, Any] | None:
             if isinstance(s, str) and str(s).strip()
         ]
 
-    # Accept dimension_character (new) or issue_character (legacy)
     dimension_character = ""
     dc = raw.get("dimension_character")
     if isinstance(dc, str) and dc.strip():
         dimension_character = dc.strip()
-
-    issue_character = ""
-    ic = raw.get("issue_character")
-    if isinstance(ic, str) and ic.strip():
-        issue_character = ic.strip()
 
     score_rationale = ""
     sr = raw.get("score_rationale")
     if isinstance(sr, str) and sr.strip():
         score_rationale = sr.strip()
 
-    if not strengths and not dimension_character and not issue_character and not score_rationale:
+    if not strengths and not dimension_character and not score_rationale:
         return None
 
     result: dict[str, Any] = {}
     if strengths:
         result["strengths"] = strengths
-    # Store dimension_character, falling back to issue_character
-    effective_dim_char = dimension_character or issue_character
-    if effective_dim_char:
-        result["dimension_character"] = effective_dim_char
-    if issue_character and not dimension_character:
-        result["issue_character"] = issue_character
+    if dimension_character:
+        result["dimension_character"] = dimension_character
     if score_rationale:
         result["score_rationale"] = score_rationale
     return result
@@ -69,7 +59,7 @@ def store_assessments(
 
     *assessments*: ``{dim_name: score}`` or ``{dim_name: {score, ...}}``.
     *source*: ``"per_file"`` or ``"holistic"``.
-    *dimension_judgment*: optional ``{dim_name: {strengths, issue_character, score_rationale}}``.
+    *dimension_judgment*: optional ``{dim_name: {strengths, dimension_character, score_rationale}}``.
 
     Holistic assessments overwrite per-file for the same dimension.
     Per-file assessments don't overwrite holistic.

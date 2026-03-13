@@ -10,9 +10,9 @@ from ..review_coverage import manual_clusters_with_issues
 
 def _print_observe_report_requirement() -> None:
     print(colorize("  --report is required for --stage observe.", "red"))
-    print(colorize("  Write an analysis of the issues: themes, root causes, contradictions.", "dim"))
-    print(colorize("  Identify issues that contradict each other (opposite recommendations).", "dim"))
-    print(colorize("  Do NOT just list issue IDs — describe what you actually observe.", "dim"))
+    print(colorize("  Verify the queued issues one by one against the code.", "dim"))
+    print(colorize("  State whether each issue is genuine, false positive, exaggerated, or not worth fixing.", "dim"))
+    print(colorize("  Cite the files you read and the concrete evidence behind each verdict.", "dim"))
 
 
 def _print_reflect_report_requirement() -> None:
@@ -51,13 +51,14 @@ def _print_complete_summary(plan: dict, stages: dict) -> None:
         else:
             print(colorize("    Enrich: all steps detailed", "dim"))
     if "sense-check" in stages:
-        print(colorize("    Sense-check: content & structure verified", "dim"))
+        print(colorize("    Sense-check: content, structure & value verified", "dim"))
 
 
 def _print_new_issues_since_last(si) -> None:
     print(colorize(f"  {len(si.new_since_last)} new issue(s) since last triage:", "cyan"))
+    review_issues = getattr(si, "review_issues", getattr(si, "open_issues", {}))
     for fid in sorted(si.new_since_last):
-        issue = si.open_issues.get(fid, {})
+        issue = review_issues.get(fid, {})
         print(f"    * [{short_issue_id(fid)}] {issue.get('summary', '')}")
     print()
 

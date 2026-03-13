@@ -28,7 +28,7 @@ def _count_findings_for_dimensions(
     if not relevant:
         return {}, {}
 
-    issues = state.get("issues")
+    issues = state.get("work_items")
     if not isinstance(issues, dict):
         return {}, {}
 

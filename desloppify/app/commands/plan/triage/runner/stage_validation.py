@@ -15,7 +15,8 @@ from ..stages.evidence_parsing import (
     validate_report_references_clusters,
 )
 from ..validation.enrich_quality import evaluate_enrich_quality
-from ..validation.core import (
+from ..validation.completion_policy import evaluate_completion_readiness
+from ..validation.enrich_checks import (
     _cluster_file_overlaps,
     _clusters_with_directory_scatter,
     _clusters_with_high_step_ratio,
@@ -23,11 +24,19 @@ from ..validation.core import (
 from ..completion_flow import count_log_activity_since
 from ..observe_batches import observe_dimension_breakdown
 from ..review_coverage import (
+    active_triage_issue_ids,
     cluster_issue_ids,
-    manual_clusters_with_issues,
     open_review_ids_from_state,
 )
-from ..stages.helpers import unclustered_review_issues, unenriched_clusters
+from ..stages.helpers import (
+    active_triage_issue_scope,
+    scoped_manual_clusters_with_issues,
+    triage_scoped_plan,
+    unclustered_review_issues,
+    unenriched_clusters,
+    value_check_targets,
+)
+from ..stages.evidence_parsing import parse_value_check_decision_ledger
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,7 @@ def run_enrich_quality_checks(
     repo_root: Path,
     *,
     phase_label: str,
+    triage_issue_ids: set[str] | None = None,
 ) -> list[EnrichQualityFailure]:
     """Run enrich-level executor-readiness checks for a phase."""
     report = evaluate_enrich_quality(
@@ -54,6 +64,7 @@ def run_enrich_quality_checks(
         include_missing_issue_refs=True,
         include_vague_detail=True,
         stale_issue_refs_severity="failure",
+        triage_issue_ids=triage_issue_ids,
     )
     code_map = {"underspecified": "underspecified_steps", "bad_paths": "missing_paths"}
     return [
@@ -87,7 +98,12 @@ def _validate_observe_stage(
             f"(need {min_citations}+). Reference specific issue "
             f"hashes to prove you read them."
         )
-    valid_ids = set(triage_input.open_issues.keys()) if triage_input else set()
+    review_issues = (
+        getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {}))
+        if triage_input
+        else {}
+    )
+    valid_ids = set(review_issues.keys())
     evidence = parse_observe_evidence(report, valid_ids)
     ev_failures = validate_observe_evidence(evidence, issue_count)
     blocking = [failure for failure in ev_failures if failure.blocking]
@@ -152,8 +168,9 @@ def _validate_organize_stage(plan: dict, state: dict, stages: dict) -> tuple[boo
     """Validate recorded organize-stage content."""
     if "organize" not in stages:
         return False, "Organize stage not recorded."
-    open_review_ids = open_review_ids_from_state(state)
-    manual = manual_clusters_with_issues(plan)
+    triage_scope = active_triage_issue_scope(plan, state)
+    open_review_ids = open_review_ids_from_state(state) if triage_scope is None else triage_scope
+    manual = scoped_manual_clusters_with_issues(plan, state)
     if not open_review_ids and not manual:
         report = stages["organize"].get("report", "")
         if len(report) < 100:
@@ -161,7 +178,7 @@ def _validate_organize_stage(plan: dict, state: dict, stages: dict) -> tuple[boo
         return True, ""
     if not manual:
         return False, "No manual clusters with issues exist."
-    gaps = unenriched_clusters(plan)
+    gaps = unenriched_clusters(plan, state)
     if gaps:
         names = ", ".join(name for name, _ in gaps)
         return False, f"Unenriched clusters: {names}"
@@ -192,11 +209,21 @@ def _validate_organize_stage(plan: dict, state: dict, stages: dict) -> tuple[boo
     return True, ""
 
 
-def _validate_enrich_stage(plan: dict, repo_root: Path, stages: dict) -> tuple[bool, str]:
+def _validate_enrich_stage(
+    plan: dict,
+    state: dict,
+    repo_root: Path,
+    stages: dict,
+) -> tuple[bool, str]:
     """Validate recorded enrich-stage content."""
     if "enrich" not in stages:
         return False, "Enrich stage not recorded."
-    failures = run_enrich_quality_checks(plan, repo_root, phase_label="enrich")
+    failures = run_enrich_quality_checks(
+        plan,
+        repo_root,
+        phase_label="enrich",
+        triage_issue_ids=active_triage_issue_ids(plan, state) or None,
+    )
     if failures:
         return False, failures[0].message
     return True, ""
@@ -207,19 +234,26 @@ def _validate_sense_check_stage(
     state: dict,
     repo_root: Path,
     stages: dict,
+    *,
+    triage_input: TriageInput | None = None,
 ) -> tuple[bool, str]:
-    """Validate recorded sense-check-stage content."""
+    """Validate recorded sense-check-stage content (includes value decisions)."""
     if "sense-check" not in stages:
         return False, "Sense-check stage not recorded."
     report = stages["sense-check"].get("report", "")
     if len(report) < 100:
         return False, f"Sense-check report too short ({len(report)} chars, need 100+)."
-    if not open_review_ids_from_state(state) and not manual_clusters_with_issues(plan):
+    manual_clusters = scoped_manual_clusters_with_issues(plan, state)
+    triage_issue_ids = active_triage_issue_ids(plan, state) or None
+    triage_scope = active_triage_issue_scope(plan, state)
+    open_review_ids = open_review_ids_from_state(state) if triage_scope is None else triage_scope
+    if not open_review_ids and not manual_clusters:
         return True, ""
     failures = run_enrich_quality_checks(
         plan,
         repo_root,
         phase_label="sense-check",
+        triage_issue_ids=triage_issue_ids,
     )
     if failures:
         return False, failures[0].message
@@ -227,11 +261,33 @@ def _validate_sense_check_stage(
     blocking_pf = [failure for failure in path_failures if failure.blocking]
     if blocking_pf:
         return False, blocking_pf[0].message
-    sc_clusters = manual_clusters_with_issues(plan)
-    cluster_failures = validate_report_references_clusters(report, sc_clusters)
+    cluster_failures = validate_report_references_clusters(report, manual_clusters)
     blocking_cf = [failure for failure in cluster_failures if failure.blocking]
     if blocking_cf:
         return False, blocking_cf[0].message
+    # Decision Ledger validation (value subagent output)
+    frozen_targets = None
+    if isinstance(stages.get("sense-check"), dict):
+        recorded_targets = stages["sense-check"].get("value_targets")
+        if isinstance(recorded_targets, list):
+            frozen_targets = [target for target in recorded_targets if isinstance(target, str)]
+    if frozen_targets is None and triage_input is not None:
+        triage_targets = getattr(triage_input, "value_check_targets", None)
+        if isinstance(triage_targets, list):
+            frozen_targets = [target for target in triage_targets if isinstance(target, str)]
+    targets = frozen_targets if frozen_targets is not None else value_check_targets(plan, state)
+    if targets:
+        parsed = parse_value_check_decision_ledger(report)
+        if not parsed.entries:
+            return False, "Sense-check report missing `## Decision Ledger` entries."
+        if parsed.duplicates:
+            return False, f"Sense-check report duplicates decision targets: {', '.join(parsed.duplicates[:5])}"
+        missing = [target for target in targets if target not in parsed.entries]
+        if missing:
+            return False, f"Sense-check report missing decision(s) for: {', '.join(missing[:5])}"
+        extras = [target for target in parsed.entries if target not in targets]
+        if extras:
+            return False, f"Sense-check report references non-live target(s): {', '.join(extras[:5])}"
     return True, ""
 
 
@@ -253,47 +309,19 @@ def validate_stage(
         ),
         "reflect": lambda: _validate_reflect_stage(stages),
         "organize": lambda: _validate_organize_stage(plan, state, stages),
-        "enrich": lambda: _validate_enrich_stage(plan, repo_root, stages),
-        "sense-check": lambda: _validate_sense_check_stage(plan, state, repo_root, stages),
+        "enrich": lambda: _validate_enrich_stage(plan, state, repo_root, stages),
+        "sense-check": lambda: _validate_sense_check_stage(
+            plan,
+            state,
+            repo_root,
+            stages,
+            triage_input=triage_input,
+        ),
     }
     validator = validators.get(stage)
     if validator is None:
         return False, f"Unknown stage: {stage}"
     return validator()
-
-
-def _validate_required_stages(stages: dict) -> tuple[bool, str]:
-    """Validate that all required triage stages are present and confirmed."""
-    for required in ("observe", "reflect", "organize", "enrich", "sense-check"):
-        if required not in stages:
-            return False, f"Stage {required} not recorded."
-        if not stages[required].get("confirmed_at"):
-            return False, f"Stage {required} not confirmed."
-    return True, ""
-
-
-def _validate_cluster_dependency_cycles(clusters: dict) -> tuple[bool, str]:
-    """Reject self-referential cluster dependencies."""
-    for name, cluster in clusters.items():
-        deps = cluster.get("depends_on_clusters", [])
-        if name in deps:
-            return False, f"Cluster {name} depends on itself."
-    return True, ""
-
-
-def _find_all_trivial_clusters(clusters: dict) -> list[str]:
-    """Return manual clusters whose action steps are all marked trivial."""
-    trivial_clusters: list[str] = []
-    for name, cluster in clusters.items():
-        if cluster.get("auto") or not cluster_issue_ids(cluster):
-            continue
-        steps = cluster.get("action_steps") or []
-        if steps and all(
-            isinstance(step, dict) and step.get("effort") == "trivial"
-            for step in steps
-        ):
-            trivial_clusters.append(name)
-    return trivial_clusters
 
 
 def validate_completion(
@@ -302,39 +330,13 @@ def validate_completion(
     repo_root: Path,
 ) -> tuple[bool, str]:
     """Validate plan is ready for triage completion. Returns (ok, error_msg)."""
-    meta = plan.get("epic_triage_meta", {})
-    stages = meta.get("triage_stages", {})
-
-    ok, message = _validate_required_stages(stages)
-    if not ok:
-        return ok, message
-
-    open_review_ids = open_review_ids_from_state(state)
-    manual = manual_clusters_with_issues(plan)
-    if not open_review_ids and not manual:
-        return True, ""
-    if not manual:
-        return False, "No manual clusters with issues."
-
-    gaps = unenriched_clusters(plan)
-    if gaps:
-        return False, f"{len(gaps)} cluster(s) still need enrichment."
-
-    unclustered = unclustered_review_issues(plan, state)
-    if unclustered:
-        return False, f"{len(unclustered)} review issue(s) not in any cluster."
-
-    clusters = plan.get("clusters", {})
-    ok, message = _validate_cluster_dependency_cycles(clusters)
-    if not ok:
-        return ok, message
-
-    all_trivial_clusters = _find_all_trivial_clusters(clusters)
-    if all_trivial_clusters:
-        names = ", ".join(sorted(all_trivial_clusters))
-        return True, f"Advisory: all action steps are marked trivial in cluster(s): {names}"
-
-    return True, ""
+    _ = repo_root
+    readiness = evaluate_completion_readiness(
+        plan,
+        state,
+        require_confirmed_stages=True,
+    )
+    return readiness.ok, readiness.message
 
 
 def build_auto_attestation(
@@ -343,12 +345,13 @@ def build_auto_attestation(
     triage_input: TriageInput,
 ) -> str:
     """Generate valid 80+ char attestation referencing real dimensions/cluster names."""
+    review_issues = getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {}))
     if stage == "observe":
         _by_dim, dim_names = observe_dimension_breakdown(triage_input)
         top_dims = dim_names[:3]
         dims_str = ", ".join(top_dims)
         return (
-            f"I have thoroughly analysed {len(triage_input.open_issues)} issues "
+            f"I have thoroughly analysed {len(review_issues)} issues "
             f"across dimensions including {dims_str}, identifying themes, "
             f"root causes, and contradictions across the codebase."
         )
@@ -358,13 +361,13 @@ def build_auto_attestation(
         top_dims = dim_names[:3]
         dims_str = ", ".join(top_dims)
         return (
-            f"My strategy accounts for {len(triage_input.open_issues)} issues "
+            f"My strategy accounts for {len(review_issues)} issues "
             f"across dimensions including {dims_str}, comparing against "
             f"resolved history and forming priorities for execution."
         )
 
     if stage == "organize":
-        cluster_names = manual_clusters_with_issues(plan)
+        cluster_names = scoped_manual_clusters_with_issues(plan)
         if not cluster_names:
             return (
                 "I verified there are zero open review issues in this organize batch, "
@@ -378,7 +381,7 @@ def build_auto_attestation(
         )
 
     if stage == "enrich":
-        cluster_names = manual_clusters_with_issues(plan)
+        cluster_names = scoped_manual_clusters_with_issues(plan)
         if not cluster_names:
             return (
                 "I verified there are zero open review issues in this enrich batch, "
@@ -392,7 +395,7 @@ def build_auto_attestation(
         )
 
     if stage == "sense-check":
-        cluster_names = manual_clusters_with_issues(plan)
+        cluster_names = scoped_manual_clusters_with_issues(plan)
         if not cluster_names:
             return (
                 "I verified there are zero open review issues in this sense-check batch, "
@@ -400,9 +403,9 @@ def build_auto_attestation(
             )
         names_str = ", ".join(cluster_names[:3])
         return (
-            f"Content and structure verified for clusters including {names_str}. "
+            f"Content, structure and value verified for clusters including {names_str}. "
             f"All step details are factually accurate, cross-cluster dependencies "
-            f"are safe, and enrich-level checks pass."
+            f"are safe, enrich-level checks pass, and value decisions are recorded."
         )
 
     return f"Stage {stage} completed with thorough analysis of all available data and verified against codebase."

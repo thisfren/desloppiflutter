@@ -210,7 +210,7 @@ def dependencies_context(
     allowed_files: set[str] | None = None,
 ) -> dict[str, Any]:
     cycle_issues = []
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     if not isinstance(issues, dict):
         issues = {}
     for issue in issues.values():
@@ -242,7 +242,7 @@ def testing_context(
 
     tc_issues = {
         issue["file"]
-        for issue in state.get("issues", {}).values()
+        for issue in (state.get("work_items") or state.get("issues", {})).values()
         if issue.get("detector") == "test_coverage"
         and issue.get("status") == "open"
         and in_allowed_files(issue.get("file", ""), allowed_files)

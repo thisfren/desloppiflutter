@@ -129,7 +129,7 @@ def test_ci_contracts_target_includes_phase_order_invariant() -> None:
     text = MAKEFILE.read_text()
     assert (
         'pytest -q desloppify/tests/commands/test_lifecycle_transitions.py '
-        '-k "subjective_then_score_then_triage"'
+        '-k "assessment_then_score_when_no_review_followup"'
     ) in text
 
 

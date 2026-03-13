@@ -38,8 +38,10 @@ def _issue(
 
 
 def _state_with_issues(*issues: dict) -> dict:
+    work_items = {f["id"]: f for f in issues}
     return {
-        "issues": {f["id"]: f for f in issues},
+        "work_items": work_items,
+        "issues": work_items,
         "scan_count": 5,
     }
 
@@ -581,19 +583,21 @@ class TestClusterFocusDoesNotTriggerRunScan:
 
     def _make_state_and_plan(self):
         """Two open issues, one in cluster 'auth', one outside."""
-        state: dict = {
-            "issues": {
-                "f1": {
-                    "id": "f1", "detector": "unused", "status": "open",
-                    "file": "src/auth.ts", "tier": 1, "confidence": "high",
-                    "summary": "in cluster", "detail": {},
-                },
-                "f2": {
-                    "id": "f2", "detector": "unused", "status": "open",
-                    "file": "src/utils.ts", "tier": 1, "confidence": "high",
-                    "summary": "outside cluster", "detail": {},
-                },
+        work_items = {
+            "f1": {
+                "id": "f1", "detector": "unused", "status": "open",
+                "file": "src/auth.ts", "tier": 1, "confidence": "high",
+                "summary": "in cluster", "detail": {},
             },
+            "f2": {
+                "id": "f2", "detector": "unused", "status": "open",
+                "file": "src/utils.ts", "tier": 1, "confidence": "high",
+                "summary": "outside cluster", "detail": {},
+            },
+        }
+        state: dict = {
+            "work_items": work_items,
+            "issues": work_items,
             "scan_count": 5,
         }
         plan = {
@@ -632,7 +636,7 @@ class TestClusterFocusDoesNotTriggerRunScan:
         )
 
         state, plan = self._make_state_and_plan()
-        state["issues"]["f1"]["status"] = "resolved"
+        state["work_items"]["f1"]["status"] = "resolved"
         result = build_work_queue(
             state,
             options=QueueBuildOptions(status="open", count=None, plan=plan),
@@ -651,7 +655,7 @@ class TestClusterFocusDoesNotTriggerRunScan:
         )
 
         state, plan = self._make_state_and_plan()
-        state["issues"]["f1"]["status"] = "resolved"
+        state["work_items"]["f1"]["status"] = "resolved"
         breakdown = plan_aware_queue_breakdown(state, plan=plan)
         assert breakdown.objective_actionable >= 1, (
             "active_cluster must not hide items from lifecycle breakdown"
@@ -669,8 +673,8 @@ class TestClusterFocusDoesNotTriggerRunScan:
         )
 
         state, plan = self._make_state_and_plan()
-        state["issues"]["f1"]["status"] = "resolved"
-        state["issues"]["f2"]["status"] = "resolved"
+        state["work_items"]["f1"]["status"] = "resolved"
+        state["work_items"]["f2"]["status"] = "resolved"
         result = build_work_queue(
             state,
             options=QueueBuildOptions(status="open", count=None, plan=plan),

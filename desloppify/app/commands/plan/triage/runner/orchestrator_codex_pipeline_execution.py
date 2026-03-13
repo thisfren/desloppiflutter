@@ -14,7 +14,7 @@ from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan_triage import compute_triage_progress
 
 from ..services import TriageServices
-from ..validation.core import validate_organize_against_reflect_ledger
+from ..validation.organize_policy import validate_organize_against_reflect_ledger
 from ..validation.reflect_accounting import (
     analyze_reflect_issue_accounting,
     validate_reflect_accounting,
@@ -85,6 +85,7 @@ def _record_sense_check_report(
         stage="sense-check",
         report=report,
         state=getattr(args, "state", None),
+        value_targets=getattr(args, "sense_check_value_targets", None),
     )
     cmd_stage_sense_check(record_args, services=services)
 
@@ -125,6 +126,7 @@ DEFAULT_STAGE_HANDLERS: dict[str, StageHandler] = {
             apply_updates=True,
             reload_plan=context.services.load_plan,
             append_run_log=context.append_run_log,
+            state=context.state,
         ),
         record_report=_record_sense_check_report,
     ),
@@ -211,7 +213,9 @@ def preflight_stage(
     reflect_report = str(stages.get("reflect", {}).get("report", ""))
     accounting_ok, _cited, missing_ids, duplicate_ids = validate_reflect_issue_accounting(
         report=reflect_report,
-        valid_ids=set(getattr(triage_input, "open_issues", {}).keys()),
+        valid_ids=set(
+            getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {})).keys()
+        ),
     )
     if not accounting_ok:
         reason_parts: list[str] = []
@@ -311,7 +315,9 @@ def repair_reflect_report_if_needed(
     """Retry reflect once with a targeted repair prompt when accounting is invalid."""
     _cited, missing_ids, duplicate_ids = dependencies.analyze_reflect_issue_accounting(
         report=report,
-        valid_ids=set(getattr(triage_input, "open_issues", {}).keys()),
+        valid_ids=set(
+            getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {})).keys()
+        ),
     )
     if not missing_ids and not duplicate_ids:
         return report, None
@@ -354,7 +360,9 @@ def repair_reflect_report_if_needed(
 
     _cited, missing_after, duplicates_after = dependencies.analyze_reflect_issue_accounting(
         report=repaired_report,
-        valid_ids=set(getattr(triage_input, "open_issues", {}).keys()),
+        valid_ids=set(
+            getattr(triage_input, "review_issues", getattr(triage_input, "open_issues", {})).keys()
+        ),
     )
     if missing_after or duplicates_after:
         return None, "reflect_repair_invalid"

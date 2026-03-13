@@ -149,7 +149,7 @@ def _compute_review_priority(filepath: str, lang, state: dict) -> int:
             score += ic * 10
 
     # Already has programmatic issues (compound value — review will be richer)
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     n_issues = sum(
         1 for f in issues.values() if f.get("file") == rpath and f["status"] == "open"
     )

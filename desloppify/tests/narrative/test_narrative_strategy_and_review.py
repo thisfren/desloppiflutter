@@ -884,7 +884,7 @@ class TestComputeStrategy:
 
 
 class TestReviewHeadline:
-    """Headline should mention review issues in all phases."""
+    """Headline should mention review work items in all phases."""
 
     def test_review_suffix_in_middle_grind(self):
         """Review suffix should appear even during middle_grind (not just maintenance)."""
@@ -902,10 +902,10 @@ class TestReviewHeadline:
             open_by_detector=by_det,
         )
         assert headline is not None
-        assert "review issue" in headline.lower()
+        assert "review work item" in headline.lower()
 
     def test_review_suffix_with_uninvestigated(self):
-        """Uninvestigated review issues should mention show review."""
+        """Uninvestigated review work items should mention show review."""
         by_det = {"review": 2, "review_uninvestigated": 2}
         headline = compute_headline(
             "maintenance",
@@ -923,7 +923,7 @@ class TestReviewHeadline:
         assert "desloppify show review" in headline
 
     def test_review_suffix_all_investigated(self):
-        """When all review issues are investigated, show 'pending' not 'issues'."""
+        """When all review work items are investigated, show 'pending' not 'issues'."""
         by_det = {"review": 2, "review_uninvestigated": 0}
         headline = compute_headline(
             "maintenance",
@@ -957,7 +957,7 @@ class TestReviewHeadline:
         )
         # Should not mention review at all
         if headline:
-            assert "review issue" not in headline.lower()
+            assert "review work item" not in headline.lower()
 
 
 class TestReviewUninvestigatedCount:
@@ -990,15 +990,17 @@ class TestReviewReminders:
     """Review-related reminders: pending issues + re-review needed."""
 
     def _base_state(self):
-        return {
-            "issues": {
-                "r1": {"status": "open", "detector": "review", "detail": {}},
-                "r2": {
-                    "status": "open",
-                    "detector": "review",
-                    "detail": {"investigation": "done"},
-                },
+        work_items = {
+            "r1": {"status": "open", "detector": "review", "detail": {}},
+            "r2": {
+                "status": "open",
+                "detector": "review",
+                "detail": {"investigation": "done"},
             },
+        }
+        return {
+            "work_items": work_items,
+            "issues": work_items,
             "reminder_history": {},
         }
 
@@ -1010,12 +1012,12 @@ class TestReviewReminders:
         types = [r["type"] for r in reminders]
         assert "review_issues_pending" in types
         msg = next(r for r in reminders if r["type"] == "review_issues_pending")
-        assert "1 review issue" in msg["message"]
+        assert "1 review work item" in msg["message"]
         assert "desloppify show review" in msg["message"]
 
     def test_no_review_pending_when_all_investigated(self):
         state = self._base_state()
-        state["issues"]["r1"]["detail"]["investigation"] = "done too"
+        state["work_items"]["r1"]["detail"]["investigation"] = "done too"
         reminders, _ = compute_reminders(
             state, "typescript", "middle_grind", {}, [], {}, {}, "scan"
         )
@@ -1052,7 +1054,7 @@ class TestReviewReminders:
 
 
 class TestStrategyReviewHint:
-    """Strategy hint should mention review issues when issue_queue action exists."""
+    """Strategy hint should mention review work items when issue_queue action exists."""
 
     def test_review_appended_to_hint(self):
         issues = _issues_dict(

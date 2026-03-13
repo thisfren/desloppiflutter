@@ -21,7 +21,7 @@ class TestImportReviewIssues:
         diff = import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
         assert diff["new"] == 3
         # Check issues were added to state
-        issues = empty_state["issues"]
+        issues = empty_state["work_items"]
         assert len(issues) == 3
         # Check issue IDs follow the pattern
         ids = list(issues.keys())
@@ -55,7 +55,7 @@ class TestImportReviewIssues:
             }
         ]
         import_review_issues(_as_review_payload(data), empty_state, "typescript")
-        issue = list(empty_state["issues"].values())[0]
+        issue = list(empty_state["work_items"].values())[0]
         assert issue["confidence"] == "low"
 
     def test_import_validates_dimension(self, empty_state):
@@ -109,7 +109,7 @@ class TestImportReviewIssues:
         # First import
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
         # Mark one as wontfix
-        for f in empty_state["issues"].values():
+        for f in empty_state["work_items"].values():
             if "naming_quality" in f["id"]:
                 f["status"] = "wontfix"
                 f["note"] = "intentionally generic"
@@ -117,25 +117,25 @@ class TestImportReviewIssues:
         # Second import with same issues
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
         # Wontfix should NOT be auto-resolved (it's still in current issues)
-        assert any(f["status"] == "wontfix" for f in empty_state["issues"].values())
+        assert any(f["status"] == "wontfix" for f in empty_state["work_items"].values())
         # The issue still exists
         assert any(
-            "naming_quality" in f["id"] for f in empty_state["issues"].values()
+            "naming_quality" in f["id"] for f in empty_state["work_items"].values()
         )
 
     def test_import_sets_lang(self, empty_state, sample_issues_data):
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "python")
-        for f in empty_state["issues"].values():
+        for f in empty_state["work_items"].values():
             assert f["lang"] == "python"
 
     def test_import_sets_tier_3(self, empty_state, sample_issues_data):
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
-        for f in empty_state["issues"].values():
+        for f in empty_state["work_items"].values():
             assert f["tier"] == 3
 
     def test_import_stores_detail(self, empty_state, sample_issues_data):
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
-        for f in empty_state["issues"].values():
+        for f in empty_state["work_items"].values():
             assert "dimension" in f["detail"]
             assert "suggestion" in f["detail"]
 
@@ -164,7 +164,7 @@ class TestImportReviewIssues:
         # Same file + dimension + identifier = same issue ID, even with different summaries.
         # The second entry overwrites the first (last-writer wins during import).
         assert diff["new"] == 1
-        assert len(empty_state["issues"]) == 1
+        assert len(empty_state["work_items"]) == 1
 
     def test_id_stable_for_same_summary(self, empty_state):
         """Same summary should produce the same issue ID (stable identifier)."""
@@ -178,12 +178,12 @@ class TestImportReviewIssues:
             }
         ]
         import_review_issues(_as_review_payload(data), empty_state, "typescript")
-        ids_first = set(empty_state["issues"].keys())
+        ids_first = set(empty_state["work_items"].keys())
 
         # Import again — should match same IDs (no new issues)
         diff = import_review_issues(_as_review_payload(data), empty_state, "typescript")
         assert diff["new"] == 0
-        assert set(empty_state["issues"].keys()) == ids_first
+        assert set(empty_state["work_items"].keys()) == ids_first
 
 
 # ── Scoring integration tests ─────────────────────────────────────
@@ -201,7 +201,7 @@ class TestScoringIntegration:
         }
         potentials = {"review": 2}
         dim_scores = compute_dimension_scores(
-            empty_state["issues"], potentials, subjective_assessments=assessments
+            empty_state["work_items"], potentials, subjective_assessments=assessments
         )
         assert "Naming quality" in dim_scores
         assert dim_scores["Naming quality"]["score"] == 75.0
@@ -215,7 +215,7 @@ class TestScoringIntegration:
         import_review_issues(_as_review_payload(sample_issues_data), empty_state, "typescript")
         review_ids = {
             f["id"]
-            for f in empty_state["issues"].values()
+            for f in empty_state["work_items"].values()
             if f["detector"] == "review"
         }
 
@@ -231,8 +231,8 @@ class TestScoringIntegration:
 
         # Review issues should still be open (not auto-resolved)
         for fid in review_ids:
-            if fid in empty_state["issues"]:
-                assert empty_state["issues"][fid]["status"] == "open"
+            if fid in empty_state["work_items"]:
+                assert empty_state["work_items"][fid]["status"] == "open"
 
     def test_review_in_file_based_detectors(self):
         assert "review" in FILE_BASED_DETECTORS
@@ -267,7 +267,7 @@ class TestAssessmentImport:
         }
         diff = import_review_issues(_as_review_payload(data), state, "typescript")
         assert diff["new"] == 1
-        assert len(state["issues"]) == 1
+        assert len(state["work_items"]) == 1
         assessments = state["subjective_assessments"]
         assert "naming_quality" in assessments
         assert assessments["naming_quality"]["score"] == 75

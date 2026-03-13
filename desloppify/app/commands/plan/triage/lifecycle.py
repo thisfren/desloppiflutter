@@ -12,6 +12,10 @@ from desloppify.engine.plan_triage import (
     TriageStartDecision,
     decide_triage_start,
 )
+from desloppify.engine._plan.policy.subjective import (
+    SubjectiveVisibility,
+    compute_subjective_visibility,
+)
 from desloppify.base.output.terminal import colorize
 from desloppify.state_io import StateModel
 
@@ -58,7 +62,7 @@ def _print_triage_start_block(reason: str, *, deps: TriageLifecycleDeps) -> None
         )
         return
 
-    print(deps.colorize("  Cannot start triage while objective backlog is still open.", "red"))
+    print(deps.colorize("  Triage is pending behind the current objective backlog.", "red"))
     print(
         deps.colorize(
             "  Finish current objective work first, or pass --attestation "
@@ -73,6 +77,7 @@ def ensure_triage_started(
     *,
     services: TriageServices,
     state: StateModel | None = None,
+    policy: SubjectiveVisibility | None = None,
     attestation: str | None = None,
     log_action: str | None = None,
     log_actor: str = "system",
@@ -84,6 +89,9 @@ def ensure_triage_started(
     """Ensure triage stages are injected or return a blocked/already-active outcome."""
     resolved_deps = deps or TriageLifecycleDeps()
     meta = plan.setdefault("epic_triage_meta", {})
+    resolved_policy = policy
+    if resolved_policy is None and state is not None:
+        resolved_policy = compute_subjective_visibility(state, plan=plan)
 
     if resolved_deps.has_triage_in_queue(plan):
         if state is not None:
@@ -95,6 +103,7 @@ def ensure_triage_started(
     decision = resolved_deps.decide_triage_start(
         plan,
         state,
+        policy=resolved_policy,
         explicit_start=True,
         attested_override=bool(attestation and len(attestation.strip()) >= 30),
     )

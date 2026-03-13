@@ -14,7 +14,7 @@ Subpackages:
 
 Other modules:
 - persistence: JSON read/write with atomic saves
-- reconcile: post-scan plan↔state synchronization
+- scan_issue_reconcile: post-scan stale/dead-reference synchronization
 - auto_cluster: automatic issue clustering
 - commit_tracking: git commit↔plan-item linking
 

@@ -64,7 +64,7 @@ def _biggest_gap_dimensions(dim_scores: dict, state: StateModel) -> list[dict]:
     """Build summary entries for dimensions with the biggest strict gap."""
     biggest_gap = []
     scoped = path_scoped_issues(
-        state.get("issues", {}), state.get("scan_path")
+        (state.get("work_items") or state.get("issues", {})), state.get("scan_path")
     )
     for name, ds in dim_scores.items():
         lenient = ds["score"]

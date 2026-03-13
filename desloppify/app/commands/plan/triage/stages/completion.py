@@ -9,24 +9,24 @@ from desloppify.base.output.user_message import print_user_message
 
 from .records import record_confirm_existing_completion
 from .rendering import _print_complete_summary
-from ..validation.core import (
-    _auto_confirm_enrich_for_complete,
-    _completion_clusters_valid,
+from ..validation.completion_policy import (
     _completion_strategy_valid,
     _confirm_existing_stages_valid,
     _confirm_note_valid,
     _confirm_strategy_valid,
     _confirmed_text_or_error,
     _note_cites_new_issues_or_error,
-    _require_enrich_stage_for_complete,
-    _require_organize_stage_for_complete,
     _require_prior_strategy_for_confirm,
-    _require_sense_check_stage_for_complete,
     _resolve_completion_strategy,
     _resolve_confirm_existing_strategy,
+    evaluate_completion_readiness,
 )
 from ..validation.completion_stages import (
+    _auto_confirm_enrich_for_complete,
     _auto_confirm_stage_for_complete,
+    _require_enrich_stage_for_complete,
+    _require_organize_stage_for_complete,
+    _require_sense_check_stage_for_complete,
 )
 from ..validation.enrich_checks import _underspecified_steps
 from ..completion_flow import apply_completion
@@ -38,6 +38,7 @@ from ..review_coverage import (
 )
 from ..stage_queue import has_triage_in_queue
 from ..services import TriageServices, default_triage_services
+from .helpers import active_triage_issue_scope, triage_scoped_plan
 
 
 def _print_completion_coverage_warning(*, organized: int, total: int) -> None:
@@ -169,7 +170,8 @@ def _cmd_triage_complete(
     stages = meta.get("triage_stages", {})
 
     state = resolved_services.command_runtime(args).state
-    review_ids = open_review_ids_from_state(state)
+    triage_scope = active_triage_issue_scope(plan, state)
+    review_ids = open_review_ids_from_state(state) if triage_scope is None else triage_scope
 
     # Organize gate
     if not _require_organize_stage_for_complete(plan=plan, meta=meta, stages=stages):
@@ -181,7 +183,7 @@ def _cmd_triage_complete(
         return
 
     # Enrich gate — compute underspecified steps once, share across require + confirm
-    underspec = _underspecified_steps(plan)
+    underspec = _underspecified_steps(triage_scoped_plan(plan, state))
     if not _require_enrich_stage_for_complete(
         plan=plan, meta=meta, stages=stages, underspec=underspec,
     ):
@@ -201,7 +203,12 @@ def _cmd_triage_complete(
     ):
         return
 
-    if not _completion_clusters_valid(plan, state):
+    readiness = evaluate_completion_readiness(
+        plan,
+        state,
+        require_confirmed_stages=False,
+    )
+    if not readiness.ok:
         _record_incomplete_recovery(
             plan=plan,
             state=state,
@@ -210,7 +217,8 @@ def _cmd_triage_complete(
         )
         return
 
-    organized, total, _clusters = triage_coverage(plan, open_review_ids=review_ids)
+    organized = readiness.organized
+    total = readiness.total
     if total > 0 and organized == 0:
         _print_completion_coverage_warning(organized=organized, total=total)
         return

@@ -224,7 +224,7 @@ def generate_plan_md(state: PlanState, plan: dict | None = None) -> str:
     items, clusters, skipped, and superseded sections are rendered.
     When no plan exists, output is identical to the previous behavior.
     """
-    issues = state["issues"]
+    issues = state.get("work_items") or state.get("issues", {})
     stats = state.get("stats", {})
 
     # Auto-load plan if not provided

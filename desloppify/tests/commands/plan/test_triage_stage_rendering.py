@@ -14,7 +14,8 @@ def test_print_observe_report_requirement_emits_guidance(monkeypatch, capsys) ->
 
     out = capsys.readouterr().out
     assert "--report is required for --stage observe" in out
-    assert "Do NOT just list issue IDs" in out
+    assert "Verify the queued issues one by one against the code" in out
+    assert "Cite the files you read" in out
 
 
 def test_print_complete_summary_emits_stage_details(monkeypatch, capsys) -> None:
@@ -48,7 +49,7 @@ def test_print_complete_summary_emits_stage_details(monkeypatch, capsys) -> None
     assert "Triage summary" in out
     assert "Observe: 5 issues analysed" in out
     assert "cluster-alpha: 2 steps" in out
-    assert "Sense-check: content & structure verified" in out
+    assert "Sense-check: content, structure & value verified" in out
 
 
 def test_print_new_issues_since_last_lists_ids_and_summaries(monkeypatch, capsys) -> None:

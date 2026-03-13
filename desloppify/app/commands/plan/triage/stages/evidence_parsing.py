@@ -58,6 +58,14 @@ class ObserveEvidence:
     has_parseable_ids: bool = True  # False if valid_ids had no hex-hash IDs
 
 
+@dataclass
+class DecisionLedger:
+    """Parsed keep/tighten/skip coverage from a value-check report."""
+
+    entries: dict[str, str] = field(default_factory=dict)
+    duplicates: list[str] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # OBSERVE evidence parsing — structured template format
 # ---------------------------------------------------------------------------
@@ -422,6 +430,29 @@ def validate_report_has_file_paths(report: str) -> list[EvidenceFailure]:
     )]
 
 
+_VALUE_LEDGER_RE = re.compile(
+    r"^\s*-\s*(?P<target>.+?)\s*->\s*(?P<decision>keep|tighten|skip)\s*$",
+    re.IGNORECASE,
+)
+
+
+def parse_value_check_decision_ledger(report: str) -> DecisionLedger:
+    """Parse `## Decision Ledger` lines from a value-check report."""
+    entries: dict[str, str] = {}
+    duplicates: list[str] = []
+    for line in report.splitlines():
+        match = _VALUE_LEDGER_RE.match(line)
+        if match is None:
+            continue
+        target = match.group("target").strip()
+        decision = match.group("decision").strip().lower()
+        if target in entries:
+            duplicates.append(target)
+            continue
+        entries[target] = decision
+    return DecisionLedger(entries=entries, duplicates=duplicates)
+
+
 # ---------------------------------------------------------------------------
 # Shared output helpers
 # ---------------------------------------------------------------------------
@@ -466,11 +497,13 @@ def resolve_short_hash_to_full_id(short_hash: str, valid_ids: set[str]) -> str |
 
 
 __all__ = [
+    "DecisionLedger",
     "EvidenceFailure",
     "ObserveAssessment",
     "ObserveEvidence",
     "VERDICT_KEYWORDS",
     "format_evidence_failures",
+    "parse_value_check_decision_ledger",
     "parse_observe_evidence",
     "resolve_short_hash_to_full_id",
     "validate_observe_evidence",

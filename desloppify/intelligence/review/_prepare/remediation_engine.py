@@ -44,7 +44,7 @@ def render_empty_remediation_plan(state: StateModel, lang_name: str) -> str:
 def _collect_holistic_issues(
     state: StateModel,
 ) -> list[tuple[str, Issue]]:
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     return [
         (issue_id, issue)
         for issue_id, issue in issues.items()

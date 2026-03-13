@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from desloppify.intelligence.review.context_holistic._clusters_security import (
+from desloppify.intelligence.review.context_holistic.clusters.security import (
     _build_security_hotspots,
     _build_signal_density,
     _build_systemic_patterns,

@@ -55,7 +55,7 @@ def test_do_merge_dry_run_reports_groups_without_persisting(
         related_files=["desloppify/app/commands/helpers/runtime.py"],
     )
     state = state_mod.empty_state()
-    state["issues"] = {first["id"]: first, second["id"]: second}
+    state["work_items"] = {first["id"]: first, second["id"]: second}
     runtime = _runtime_with_state(state, tmp_path / "state.json")
 
     monkeypatch.setattr(merge_mod, "command_runtime", lambda _args: runtime)
@@ -67,8 +67,8 @@ def test_do_merge_dry_run_reports_groups_without_persisting(
     args = argparse.Namespace(similarity=0.3, dry_run=True)
     merge_mod.do_merge(args)
 
-    assert state["issues"][first["id"]]["status"] == "open"
-    assert state["issues"][second["id"]]["status"] == "open"
+    assert state["work_items"][first["id"]]["status"] == "open"
+    assert state["work_items"][second["id"]]["status"] == "open"
     assert "Dry run only" in capsys.readouterr().out
 
 
@@ -84,7 +84,7 @@ def test_do_merge_marks_duplicates_and_persists_state(monkeypatch, tmp_path: Pat
         related_files=["desloppify/app/commands/resolve/plan_load.py"],
     )
     state = state_mod.empty_state()
-    state["issues"] = {first["id"]: first, second["id"]: second}
+    state["work_items"] = {first["id"]: first, second["id"]: second}
     runtime = _runtime_with_state(state, tmp_path / "state.json")
     saved: list[tuple[dict, Path | None]] = []
     query_payloads: list[dict] = []
@@ -106,9 +106,9 @@ def test_do_merge_marks_duplicates_and_persists_state(monkeypatch, tmp_path: Pat
     assert saved == [(state, runtime.state_path)]
     assert query_payloads and query_payloads[0]["duplicates_merged"] == 1
 
-    open_issues = [issue for issue in state["issues"].values() if issue["status"] == "open"]
+    open_issues = [issue for issue in state["work_items"].values() if issue["status"] == "open"]
     auto_resolved = [
-        issue for issue in state["issues"].values() if issue["status"] == "auto_resolved"
+        issue for issue in state["work_items"].values() if issue["status"] == "auto_resolved"
     ]
     assert len(open_issues) == 1
     assert len(auto_resolved) == 1

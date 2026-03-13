@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.engine._plan.reconcile import reconcile_plan_after_scan
+from desloppify.engine._plan.scan_issue_reconcile import reconcile_plan_after_scan
 from desloppify.engine._plan.schema import empty_plan
 from desloppify.engine._plan.sync.dimensions import sync_subjective_dimensions
 
@@ -39,8 +39,10 @@ def _state_with_stale_dimensions(*dim_keys: str, score: float = 50.0) -> dict:
             "refresh_reason": "mechanical_issues_changed",
             "stale_since": "2025-01-01T00:00:00+00:00",
         }
+    work_items: dict[str, dict] = {}
     return {
-        "issues": {},
+        "work_items": work_items,
+        "issues": work_items,
         "scan_count": 5,
         "dimension_scores": dim_scores,
         "subjective_assessments": assessments,
@@ -69,8 +71,10 @@ def _state_with_unscored_dimensions(*dim_keys: str) -> dict:
             "source": "scan_reset_subjective",
             "placeholder": True,
         }
+    work_items: dict[str, dict] = {}
     return {
-        "issues": {},
+        "work_items": work_items,
+        "issues": work_items,
         "scan_count": 1,
         "dimension_scores": dim_scores,
         "subjective_assessments": assessments,
@@ -98,8 +102,10 @@ def _state_with_under_target_dimensions(*dim_keys: str, score: float = 50.0) -> 
             "score": score,
             "needs_review_refresh": False,
         }
+    work_items: dict[str, dict] = {}
     return {
-        "issues": {},
+        "work_items": work_items,
+        "issues": work_items,
         "scan_count": 5,
         "dimension_scores": dim_scores,
         "subjective_assessments": assessments,
@@ -206,7 +212,8 @@ def test_unscored_sync_does_not_prune_stale_ids():
 
 def test_unscored_no_injection_when_no_dimension_scores():
     plan = _plan_with_queue()
-    state = {"issues": {}, "scan_count": 1}
+    work_items: dict[str, dict] = {}
+    state = {"work_items": work_items, "issues": work_items, "scan_count": 1}
 
     result = sync_subjective_dimensions(plan, state)
     assert result.injected == []
@@ -267,7 +274,7 @@ def test_no_injection_when_queue_has_real_items():
     plan = _plan_with_queue("some_issue::file.py::abc123")
     state = _state_with_stale_dimensions("design_coherence")
     # Add an actual open objective issue to state (source of truth)
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -286,7 +293,7 @@ def test_stale_ids_evicted_when_objective_backlog_exists():
         "some_issue::file.py::abc123",
     )
     state = _state_with_stale_dimensions("design_coherence", "error_consistency")
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -306,7 +313,7 @@ def test_stale_ids_inject_when_backlog_clears():
     """Stale IDs inject when objective backlog clears."""
     plan = _plan_with_queue("some_issue::file.py::abc123")
     state = _state_with_stale_dimensions("design_coherence")
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -317,7 +324,7 @@ def test_stale_ids_inject_when_backlog_clears():
     assert r1.injected == []
 
     # Objective backlog clears
-    state["issues"]["some_issue::file.py::abc123"]["status"] = "done"
+    state["work_items"]["some_issue::file.py::abc123"]["status"] = "done"
 
     r2 = sync_subjective_dimensions(plan, state)
     assert "subjective::design_coherence" in r2.injected
@@ -579,7 +586,7 @@ def test_under_target_evicted_mid_cycle_with_objective_backlog():
         stale=[],
         under_target=["naming_quality"],
     )
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -602,7 +609,7 @@ def test_under_target_reinjected_after_objective_backlog_clears():
         stale=[],
         under_target=["naming_quality", "error_handling"],
     )
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -614,7 +621,7 @@ def test_under_target_reinjected_after_objective_backlog_clears():
     assert "subjective::naming_quality" not in plan["queue_order"]
 
     # Step 2: objective backlog clears
-    state["issues"]["some_issue::file.py::abc123"]["status"] = "done"
+    state["work_items"]["some_issue::file.py::abc123"]["status"] = "done"
 
     # Step 3: under_target IDs injected
     r2 = sync_subjective_dimensions(plan, state)
@@ -634,7 +641,7 @@ def test_escalation_mid_cycle_reinserts_evicted_ids():
     plan = _plan_with_queue("some_issue::file.py::abc123")
     plan["plan_start_scores"] = {"strict": 50.0}  # mid-cycle
     state = _state_with_under_target_dimensions("naming_quality")
-    state["issues"] = {
+    state["work_items"] = {
         "some_issue::file.py::abc123": {
             "id": "some_issue::file.py::abc123",
             "status": "open",

@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from desloppify import state as state_mod
 from desloppify.engine.concerns import cleanup_stale_dismissals, generate_concerns
+from desloppify.engine._state.merge import MergeScanOptions, merge_scan
+from desloppify.engine._state.schema import StateModel, utc_now
 from desloppify.engine.scoring import HOLISTIC_POTENTIAL
 from desloppify.intelligence.review.dimensions import normalize_dimension_name
 from desloppify.intelligence.review.dimensions.data import load_dimensions_for_lang
@@ -53,11 +54,11 @@ def parse_holistic_import_payload(
 
 def import_holistic_issues(
     issues_data: ReviewImportPayload,
-    state: state_mod.StateModel,
+    state: StateModel,
     lang_name: str,
     *,
     project_root: Path | str | None = None,
-    utc_now_fn=state_mod.utc_now,
+    utc_now_fn=utc_now,
 ) -> dict[str, Any]:
     """Import holistic (codebase-wide) issues into state."""
     payload: ReviewImportEnvelope = parse_review_import_payload(
@@ -147,10 +148,10 @@ def import_holistic_issues(
     if potentials.get("concerns", 0) > 0:
         merge_potentials_dict["concerns"] = potentials["concerns"]
 
-    diff = state_mod.merge_scan(
+    diff = merge_scan(
         state,
         review_issues,
-        options=state_mod.MergeScanOptions(
+        options=MergeScanOptions(
             lang=lang_name,
             potentials=merge_potentials_dict,
             merge_potentials=True,

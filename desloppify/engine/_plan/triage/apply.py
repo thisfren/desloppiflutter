@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from desloppify.engine._plan.cluster_semantics import EXECUTION_STATUS_ACTIVE
 from desloppify.engine._plan.policy.stale import review_issue_snapshot_hash
 from desloppify.engine._plan.schema import (
     EPIC_PREFIX,
@@ -12,7 +13,8 @@ from desloppify.engine._plan.schema import (
     ensure_plan_defaults,
 )
 from desloppify.engine._plan.skip_policy import skip_kind_state_status
-from desloppify.engine._state.schema import StateModel, utc_now
+from desloppify.engine._state.issue_semantics import is_triage_finding
+from desloppify.engine._state.schema import StateModel, ensure_state_defaults, utc_now
 
 from .dismiss import dismiss_triage_issues
 from .prompt import TriageResult
@@ -67,6 +69,7 @@ def _update_existing_epic_cluster(
     existing["agent_safe"] = epic_data.get("agent_safe", False)
     existing["dependency_order"] = epic_data["dependency_order"]
     existing["action_steps"] = epic_data.get("action_steps", [])
+    existing["execution_status"] = EXECUTION_STATUS_ACTIVE
     existing["updated_at"] = now
     existing["triage_version"] = version
     existing["description"] = epic_data["thesis"]
@@ -89,6 +92,7 @@ def _create_epic_cluster(
         "auto": True,
         "cluster_key": f"epic::{epic_name}",
         "action": f"desloppify plan focus {epic_name}",
+        "execution_status": EXECUTION_STATUS_ACTIVE,
         "user_modified": False,
         "created_at": now,
         "updated_at": now,
@@ -169,9 +173,9 @@ def _set_triage_meta(
     current_hash = review_issue_snapshot_hash(state)
     open_review_ids = sorted(
         fid
-        for fid, issue in state.get("issues", {}).items()
+        for fid, issue in (state.get("work_items") or state.get("issues", {})).items()
         if issue.get("status") == "open"
-        and issue.get("detector") in ("review", "concerns")
+        and is_triage_finding(issue)
     )
 
     plan["epic_triage_meta"] = {
@@ -200,6 +204,7 @@ def apply_triage_to_plan(
     4. Updates epic_triage_meta with snapshot hash
     """
     ensure_plan_defaults(plan)
+    ensure_state_defaults(state)
     now = utc_now()
     result = TriageMutationResult()
     result.strategy_summary = triage.strategy_summary
@@ -231,7 +236,7 @@ def apply_triage_to_plan(
     result.issues_dismissed += dismiss_count
 
     # Sync state status for dismissed issues so state is authoritative.
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     triaged_out_status = skip_kind_state_status("triaged_out")
     for fid in dismissed_ids:
         issue = issues.get(fid)

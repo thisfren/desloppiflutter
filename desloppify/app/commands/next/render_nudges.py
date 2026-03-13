@@ -16,7 +16,9 @@ from desloppify.base.config import load_config
 from desloppify.base.output.terminal import colorize, log
 from desloppify.base.output.user_message import print_user_message
 from desloppify.engine._scoring.results.core import compute_health_breakdown
+from desloppify.engine._state.issue_semantics import is_assessment_request
 from desloppify.engine._work_queue.core import ATTEST_EXAMPLE
+from desloppify.engine._work_queue.helpers import is_auto_fix_item
 from desloppify.intelligence.integrity import (
     unassessed_subjective_dimensions,
 )
@@ -60,8 +62,7 @@ def render_single_item_resolution_hint(items: list[dict]) -> None:
     if kind != "issue":
         return
     item = items[0]
-    detector_name = item.get("detector", "")
-    if detector_name == "subjective_review":
+    if is_assessment_request(item):
         dim_key = (item.get("detail") or {}).get("dimension", "")
         primary = item.get("primary_command", "")
         if not primary:
@@ -84,7 +85,7 @@ def render_single_item_resolution_hint(items: list[dict]) -> None:
         return
 
     primary = item.get("primary_command", "")
-    if is_auto_fix_command(primary):
+    if is_auto_fix_item(item) and is_auto_fix_command(primary):
         print(colorize("\n  Fix with:", "dim"))
         print(f"    {primary}")
         print(colorize("  Or resolve individually:", "dim"))
@@ -215,7 +216,7 @@ def _subjective_summary_parts(
         parts.append(f"{unassessed_count} unassessed")
     if open_review_count:
         parts.append(
-            f"{open_review_count} review issue{'s' if open_review_count != 1 else ''} open"
+            f"{open_review_count} review work item{'s' if open_review_count != 1 else ''} open"
         )
     if coverage_open > 0:
         parts.append(f"{coverage_open} file{'s' if coverage_open != 1 else ''} need review")

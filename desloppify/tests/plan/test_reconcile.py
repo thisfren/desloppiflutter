@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from desloppify.engine._plan.operations.cluster import add_to_cluster, create_cluster
-from desloppify.engine._plan.reconcile import reconcile_plan_after_scan
+from desloppify.engine._plan.scan_issue_reconcile import reconcile_plan_after_scan
 from desloppify.engine._plan.schema import empty_plan, ensure_plan_defaults
 
 # ---------------------------------------------------------------------------
@@ -144,3 +144,24 @@ def test_reconcile_no_log_when_no_changes():
     log = plan.get("execution_log", [])
     reconcile_entries = [e for e in log if e["action"] == "reconcile"]
     assert len(reconcile_entries) == 0
+
+
+def test_reconcile_prunes_existing_superseded_references():
+    """Already-superseded IDs should not linger in queue_order or clusters."""
+    plan = _plan_with_queue("a", "b")
+    ensure_plan_defaults(plan)
+    plan["superseded"]["a"] = {
+        "original_id": "a",
+        "status": "superseded",
+        "superseded_at": "2026-01-01T00:00:00+00:00",
+    }
+    plan["promoted_ids"] = ["a"]
+    create_cluster(plan, "my-cluster")
+    add_to_cluster(plan, "my-cluster", ["a", "b"])
+
+    result = reconcile_plan_after_scan(plan, _state_with_issues("b"))
+
+    assert result.changes > 0
+    assert "a" not in plan["queue_order"]
+    assert "a" not in plan["promoted_ids"]
+    assert "a" not in plan["clusters"]["my-cluster"]["issue_ids"]

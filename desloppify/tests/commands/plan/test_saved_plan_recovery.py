@@ -35,7 +35,7 @@ def test_load_state_recovers_runtime_state_from_saved_plan(tmp_path: Path) -> No
 
     state = load_state(tmp_path / "state-typescript.json")
 
-    assert "review::src/foo.ts::abcd1234" in state["issues"]
+    assert "review::src/foo.ts::abcd1234" in state["work_items"]
     assert state["scan_metadata"] == {
         "source": "plan_reconstruction",
         "plan_queue_available": True,
@@ -46,7 +46,7 @@ def test_load_state_recovers_runtime_state_from_saved_plan(tmp_path: Path) -> No
 def test_load_state_drops_stale_reconstructed_state_without_live_plan(tmp_path: Path) -> None:
     """Persisted plan-derived state should clear when the live plan disappears."""
     state = empty_state()
-    state["issues"] = {
+    state["work_items"] = {
         "review::src/foo.ts::abcd1234": {
             "id": "review::src/foo.ts::abcd1234",
             "status": "open",
@@ -72,7 +72,7 @@ def test_load_state_keeps_existing_state_when_saved_plan_load_is_degraded(
 ) -> None:
     """State recovery should treat saved-plan load failures as degraded, not silently rebuild."""
     state = empty_state()
-    state["issues"] = {
+    state["work_items"] = {
         "review::src/foo.ts::abcd1234": {
             "id": "review::src/foo.ts::abcd1234",
             "status": "open",
@@ -238,5 +238,5 @@ def test_cmd_plan_repair_state_rebuilds_persisted_state(
         "plan_queue_available": True,
         "reconstructed_issue_count": 1,
     }
-    assert "review::src/foo.ts::abcd1234" in repaired["issues"]
+    assert "review::src/foo.ts::abcd1234" in repaired["work_items"]
     assert "Rebuilt state-typescript.json from plan.json" in capsys.readouterr().out

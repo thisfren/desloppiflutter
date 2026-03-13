@@ -6,6 +6,12 @@ from collections.abc import Callable
 from typing import Any
 
 from desloppify.engine._scoring.results.core import get_dimension_for_detector
+from desloppify.engine._state.issue_semantics import (
+    ASSESSMENT_REQUEST,
+    REVIEW_DEFECT,
+    REVIEW_CONCERN,
+    infer_work_item_kind,
+)
 from desloppify.intelligence.narrative._constants import DETECTOR_TOOLS
 from desloppify.intelligence.narrative.action_models import ActionItem
 
@@ -53,24 +59,25 @@ def _build_refactor_entry(
     guidance = tool_info.get("guidance", "manual fix")
     adjusted_info = {**tool_info, "guidance": guidance}
 
-    if detector == "subjective_review":
+    work_item_kind = infer_work_item_kind(detector)
+    if work_item_kind == ASSESSMENT_REQUEST:
         command = "desloppify review --prepare"
         suffix = "s" if count != 1 else ""
         description = (
-            f"{count} subjective dimension{suffix} need review — run holistic "
+            f"{count} assessment request{suffix} need review — run holistic "
             "review to refresh subjective scores"
         )
-    elif detector == "review":
+    elif work_item_kind in {REVIEW_DEFECT, REVIEW_CONCERN}:
         command = "desloppify show review --status open"
         suffix = "s" if count != 1 else ""
         description = (
-            f"{count} review issue{suffix} need investigation — "
+            f"{count} review work item{suffix} need investigation — "
             "run `desloppify show review --status open` to see them"
         )
         adjusted_info = {**adjusted_info, "action_type": "refactor"}
     else:
         command = f"desloppify show {detector} --status open"
-        description = f"{count} {detector} issues — {guidance}"
+        description = f"{count} {detector} work items — {guidance}"
 
     return {
         "type": adjusted_info["action_type"],

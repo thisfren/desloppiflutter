@@ -88,7 +88,7 @@ class TestDetectLangFromExt:
     def test_full_path(self):
         assert detect_lang_from_ext("/src/components/Button.tsx") == "typescript"
 
-    def test_raises_when_registered_plugin_fails_to_load(self, monkeypatch):
+    def test_skips_registered_plugin_when_metadata_load_fails(self, monkeypatch):
         import desloppify.app.commands.move.language as move_lang_mod
 
         move_lang_mod._ext_to_lang_map.cache_clear()
@@ -99,14 +99,11 @@ class TestDetectLangFromExt:
         )
         monkeypatch.setattr(
             move_lang_mod,
-            "load_lang_config",
-            lambda _name: (_ for _ in ()).throw(CommandError("broken plugin")),
+            "load_lang_config_metadata",
+            lambda _name: None,
         )
 
-        with pytest.raises(CommandError) as exc:
-            detect_lang_from_ext("foo.py")
-
-        assert "broken plugin" in str(exc.value)
+        assert detect_lang_from_ext("foo.py") is None
         move_lang_mod._ext_to_lang_map.cache_clear()
 
 
@@ -287,7 +284,7 @@ class TestLoadLangMoveModule:
             raise AssertionError(f"unexpected import request: {module_name}")
 
         monkeypatch.setattr(
-            "desloppify.app.commands.move.language.importlib.import_module",
+            "desloppify.app.commands.helpers.dynamic_loaders.importlib.import_module",
             _fake_import,
         )
         assert load_lang_move_module("python") is scaffold
@@ -303,7 +300,7 @@ class TestLoadLangMoveModule:
             raise AssertionError(f"unexpected import request: {module_name}")
 
         monkeypatch.setattr(
-            "desloppify.app.commands.move.language.importlib.import_module",
+            "desloppify.app.commands.helpers.dynamic_loaders.importlib.import_module",
             _fake_import,
         )
 

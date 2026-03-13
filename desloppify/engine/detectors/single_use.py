@@ -1,5 +1,7 @@
 """Single-use file detection (file-level importer heuristic for inlining candidates)."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -84,3 +86,6 @@ def detect_single_use_abstractions(
             )
             continue
     return sorted(entries, key=lambda e: -e["loc"]), total_candidates
+
+
+__all__ = ["detect_single_use_abstractions"]

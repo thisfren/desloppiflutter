@@ -59,7 +59,7 @@ def _confirm_attestation_hint(stage: str) -> str:
     if stage == "enrich":
         return "Steps are executor-ready..."
     if stage == "sense-check":
-        return "Content and structure verified..."
+        return "Content, structure and value verified..."
     return "..."
 
 

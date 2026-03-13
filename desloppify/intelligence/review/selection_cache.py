@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def get_file_issues(state: dict, filepath: str) -> list[dict]:
     """Get existing open issues for a file (summaries for context)."""
     rpath = rel(filepath)
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     return [
         {"detector": issue["detector"], "summary": issue["summary"], "id": issue["id"]}
         for issue in issues.values()

@@ -62,7 +62,7 @@ def test_build_refactor_entry_handles_special_detectors(monkeypatch) -> None:
         lambda _detector, _count: 0.8,
     )
     assert subjective["command"] == "desloppify review --prepare"
-    assert "subjective dimension" in subjective["description"]
+    assert "assessment request" in subjective["description"]
 
     review = routing_mod._build_refactor_entry(
         "review",
@@ -79,7 +79,7 @@ def test_build_refactor_entry_handles_special_detectors(monkeypatch) -> None:
         2,
         lambda _detector, _count: 1.2,
     )
-    assert generic["description"] == "2 smells issues — clean up"
+    assert generic["description"] == "2 smells work items — clean up"
 
 
 def test_append_refactor_actions_and_debt_action(monkeypatch) -> None:
@@ -136,5 +136,3 @@ def test_assign_priorities_and_cluster_annotation() -> None:
     assert auto["clusters"] == ["clusterA"]
     assert auto["command"] == "desloppify next"
     assert "cluster(s)" in auto["description"]
-
-

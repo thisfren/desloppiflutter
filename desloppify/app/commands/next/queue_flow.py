@@ -212,7 +212,7 @@ def _render_terminal_queue_view(
     """Render terminal output for a non-empty queue."""
     dim_scores = state.get("dimension_scores", {})
     issues_scoped = path_scoped_issues(
-        state.get("issues", {}),
+        (state.get("work_items") or state.get("issues", {})),
         state.get("scan_path"),
     )
     plan_start_strict = None

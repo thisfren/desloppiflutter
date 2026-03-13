@@ -25,7 +25,7 @@ def empty_state():
 @pytest.fixture
 def state_with_issues():
     state = build_empty_state()
-    state["issues"] = {
+    state["work_items"] = {
         "unused::src/foo.ts::bar": {
             "id": "unused::src/foo.ts::bar",
             "detector": "unused",

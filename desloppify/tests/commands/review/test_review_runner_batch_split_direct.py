@@ -157,13 +157,24 @@ def test_core_normalize_helpers_and_batch_normalization() -> None:
         "naming_quality",
         {
             "strengths": ["clear modules"],
-            "issue_character": "mostly local",
+            "dimension_character": "mostly local",
             "score_rationale": "x" * 60,
         },
         log_fn=lambda _msg: None,
     )
     assert judgment is not None
-    assert judgment["issue_character"] == "mostly local"
+    assert judgment["dimension_character"] == "mostly local"
+
+    aliased_judgment = core_normalize_mod._validate_dimension_judgment(
+        "logic_clarity",
+        {
+            "dimension_character": "judgment character is required",
+            "score_rationale": "y" * 60,
+        },
+        log_fn=lambda _msg: None,
+    )
+    assert aliased_judgment is not None
+    assert aliased_judgment["dimension_character"] == "judgment character is required"
 
     quality = core_normalize_mod._compute_batch_quality(
         assessments={"naming_quality": 80.0},
@@ -212,7 +223,7 @@ def test_core_normalize_helpers_and_batch_normalization() -> None:
         "dimension_judgment": {
             "naming_quality": {
                 "strengths": ["Naming conventions are mostly consistent."],
-                "issue_character": "Inconsistency is isolated to a few ambiguous identifiers.",
+                "dimension_character": "Inconsistency is isolated to a few ambiguous identifiers.",
                 "score_rationale": (
                     "Most modules use descriptive names and consistent style, but a handful of "
                     "generic names still obscure intent at handoff points. "

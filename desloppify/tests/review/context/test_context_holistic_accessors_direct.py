@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._accessors import (
+from desloppify.intelligence.review.context_holistic.clusters.accessors import (
     _get_detail,
     _get_signals,
     _safe_num,
@@ -30,4 +30,3 @@ def test_safe_num_accepts_numeric_but_rejects_bool_and_other_types() -> None:
     assert _safe_num(2.5) == 2.5
     assert _safe_num(True, default=9.0) == 9.0
     assert _safe_num("3", default=1.5) == 1.5
-

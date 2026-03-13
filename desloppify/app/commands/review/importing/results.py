@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import desloppify.intelligence.narrative.core as narrative_core
-from desloppify import state_compat as state_compat
 from desloppify.app.commands.helpers.query import write_query
 from desloppify.app.commands.helpers.queue_progress import show_score_with_plan_context
 from desloppify.app.commands.scan.reporting import dimensions as reporting_dimensions
@@ -67,7 +66,6 @@ def report_review_import_outcome(
     at_target = print_review_import_scores_and_integrity(
         state,
         config or {},
-        state_mod=state_compat,
         target_strict_score_from_config_fn=target_strict_score_from_config,
         subjective_at_target_fn=scorecard_subjective_at_target_fn,
         subjective_rerun_command_fn=reporting_dimensions.subjective_rerun_command,

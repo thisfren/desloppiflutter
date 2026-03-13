@@ -134,7 +134,16 @@ and think the fix has value, cluster them. These are judgment calls, not factual
 6. **Check recurring patterns** — compare current issues against resolved history. If the same
    dimension keeps producing issues, that's a root cause that needs addressing, not just
    another round of fixes.
-7. **Account for every issue exactly once** — every open issue hash must appear in exactly one
+7. **Consider mechanical backlog** — the backlog section shows auto-clusters
+   (pre-grouped detector findings) and unclustered items. For each auto-cluster:
+   - **promote**: name it in a `## Backlog Promotions` section. Prefer clusters with
+     `[autofix: ...]` hints because they are lower-risk.
+   - **leave**: say nothing. Silence means it stays in backlog.
+   - **supersede**: absorb the underlying work into a review cluster when the same files
+     or root cause already belong together.
+   For unclustered items: promote individually or group related ones into a manual cluster.
+   Mechanical items are NOT part of the Coverage Ledger — that ledger remains review-issues only.
+8. **Account for every issue exactly once** — every open issue hash must appear in exactly one
    cluster line or one skip line. Do not drop hashes, and do not repeat a hash in multiple
    clusters or in both a cluster and a skip.
 
@@ -149,6 +158,9 @@ This blueprint is what the organize stage will execute. Be specific:
 ## Cluster Blueprint
 Cluster "media-lightbox-hooks" (all in src/domains/media-lightbox/)
 Cluster "task-typing" (both touch src/types/database.ts)
+
+## Backlog Promotions
+- Promote auto/unused-imports (overlaps with the files in cluster "task-typing")
 
 ## Skip Decisions
 Skip "false-positive-current-code" (false positive per observe)
@@ -203,14 +215,18 @@ def _organize_instructions(mode: PromptMode = "self_record") -> str:
 3. Create clusters as specified in the blueprint:
    `desloppify plan cluster create <name> --description "..."`
 4. Add issues: `desloppify plan cluster add <name> <patterns...>`
-5. Add steps that consolidate: one step per file or logical change, NOT one step per issue
-6. Set `--effort` on each step individually (trivial/small/medium/large)
-7. Set `--depends-on` when clusters touch overlapping files
+5. Promote any mechanical backlog items that reflect explicitly selected:
+   - Auto-clusters: `desloppify plan promote auto/<cluster-name>`
+   - Individual items: `desloppify plan promote <issue-id>`
+   - With placement: `desloppify plan promote <pattern> before -t <target>`
+6. Add steps that consolidate: one step per file or logical change, NOT one step per issue
+7. Set `--effort` on each step individually (trivial/small/medium/large)
+8. Set `--depends-on` when clusters touch overlapping files
 """
     tail = """\
 When done, run:
 ```
-desloppify plan triage --stage organize --report "<summary of priorities and organization>" --attestation "<80+ chars mentioning cluster names>"
+desloppify plan triage --stage organize --report "<summary of priorities and organization>" --attestation "<80+ chars mentioning cluster names or the organized work>"
 ```
 """
     if mode == "output_only":
@@ -284,7 +300,7 @@ def _enrich_instructions(mode: PromptMode = "self_record") -> str:
     tail = """\
 When done, run:
 ```
-desloppify plan triage --stage enrich --report "<enrichment summary>" --attestation "<80+ chars mentioning cluster names>"
+desloppify plan triage --stage enrich --report "<enrichment summary>" --attestation "<80+ chars mentioning cluster names or the executor-ready work>"
 ```
 """
     if mode == "output_only":
@@ -390,6 +406,15 @@ def _sense_check_instructions(mode: PromptMode = "self_record") -> str:
 Fix with: `desloppify plan cluster update <name> --depends-on <other>`
 Fix with: `desloppify plan cluster update <name> --add-step "..." --detail "..." --effort trivial --issue-refs <hash>`
 """
+    value_commands = """\
+Use these commands aggressively:
+- `desloppify next --count 100` to inspect the current execution queue
+- `desloppify plan cluster show <name>` to inspect cluster members and steps
+- `desloppify show <issue-id-or-hash> --no-budget` to re-read the underlying finding
+- `desloppify plan cluster update <name> --description "..." --update-step N --detail "..." --effort small`
+- `desloppify plan skip --permanent <pattern> --note "<why>" --attest "I have reviewed this triage skip against the code and I am not gaming the score by suppressing a real defect."`
+- `desloppify plan cluster delete <name>` if you skipped everything it contained
+"""
     tail = """\
 When done, run:
 ```
@@ -404,8 +429,12 @@ desloppify plan triage --stage sense-check --report "<findings summary>"
             "Report the exact dependency additions or cascade steps that need to be made; "
             "the orchestrator will apply them.\n"
         )
+        value_commands = (
+            "State the exact queue items to keep, tighten, or skip, plus any cluster-step "
+            "updates or deletions needed. The orchestrator will apply them."
+        )
         tail = """\
-When done, write a plain-text sense-check report with concrete content and structure fixes.
+When done, write a plain-text sense-check report with concrete content, structure, and value findings.
 The orchestrator records and confirms the stage.
 """
     investigation_hint = (
@@ -418,8 +447,11 @@ The orchestrator records and confirms the stage.
     return f"""\
 ## SENSE-CHECK Stage Instructions
 
-This stage is handled by two parallel subagents. If you are being run as a
-single-subprocess fallback, perform BOTH the content and structure checks below.
+This stage is handled by three subagents. If you are being run as a
+single-subprocess fallback, perform ALL three checks below.
+
+Execution order: content batches (parallel) → structure batch → value batch (sequential).
+Value runs last because it needs the corrected plan state from content and structure.
 
 ### Content Check (per cluster)
 {investigation_hint}For EVERY step in every cluster, read the actual source file and verify:
@@ -451,6 +483,45 @@ Build a file-touch graph and check:
 3. CIRCULAR DEPS: Flag cycles, don't add them
 
 {structure_fix_block}
+
+### Value Check (global — YAGNI/KISS pass)
+
+Walk the CURRENT planned work item by item and make the final judgment about value.
+Ask: does doing this make the codebase genuinely better? Beauty is a valid reason to keep work,
+but not if it buys that beauty with new indirection, wrappers, abstraction layers, or confusion.
+
+For EVERY live queue target, choose exactly one:
+1. `keep` — clearly improves correctness, clarity, cohesion, simplicity, or elegance
+2. `tighten` — worth doing, but the plan must be simplified or made more concrete first
+3. `skip` — the fix would add churn, indirection, coordination, or abstraction for too little gain
+
+What should usually be skipped:
+- facade pruning that just spreads imports
+- abstraction-for-abstraction's-sake
+- tiny theoretical cleanups that make the code harder to follow
+- fixes whose implementation is more complicated than the current code
+
+What can still be worth keeping:
+- simplifications that delete layers or reduce branching
+- aesthetic cleanups that genuinely improve readability without adding machinery
+- focused unifications that make naming or flow more coherent with less confusion
+
+{value_commands}
+
+Required process:
+1. Re-read the actual code behind each queue target.
+2. Apply the rubric above, not the raw issue title.
+3. Tighten any keeper whose steps are too vague, too broad, or too complicated.
+4. Permanently skip anything that fails the value test.
+5. Delete dead clusters after skipping all their members.
+
+Required report structure — include a Decision Ledger section:
+```
+## Decision Ledger
+- cluster-or-id -> keep
+- cluster-or-id -> tighten
+- cluster-or-id -> skip
+```
 
 {tail}
 """

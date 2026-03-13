@@ -48,7 +48,7 @@ class TestImportReviewIssues:
         # Issue should be in state
         assert any(
             f.get("detector") == "review"
-            for f in empty_state.get("issues", {}).values()
+            for f in empty_state.get("work_items", {}).values()
         )
 
     def test_skips_missing_fields(self, empty_state):
@@ -80,7 +80,7 @@ class TestImportReviewIssues:
             }
         ]
         _ = import_review_issues(_as_review_payload(data), empty_state, "typescript")
-        issues = list(empty_state.get("issues", {}).values())
+        issues = list(empty_state.get("work_items", {}).values())
         review_issues = [f for f in issues if f.get("detector") == "review"]
         assert len(review_issues) == 1
         assert review_issues[0]["confidence"] == "low"
@@ -117,7 +117,7 @@ class TestImportReviewIssues:
             detail={"dimension": "naming_quality"},
         )
         old["lang"] = "typescript"
-        empty_state["issues"][old["id"]] = old
+        empty_state["work_items"][old["id"]] = old
         # Import new issues for same file, but different issue
         data = [
             {
@@ -130,7 +130,7 @@ class TestImportReviewIssues:
         ]
         _ = import_review_issues(_as_review_payload(data), empty_state, "typescript")
         # Old issue should be marked fixed by the explicit import.
-        assert empty_state["issues"][old["id"]]["status"] == "fixed"
+        assert empty_state["work_items"][old["id"]]["status"] == "fixed"
 
 
 class TestImportHolisticIssues:
@@ -147,7 +147,7 @@ class TestImportHolisticIssues:
             }
         ]
         import_holistic_issues(_as_review_payload(data), empty_state, "typescript")
-        issues = list(empty_state.get("issues", {}).values())
+        issues = list(empty_state.get("work_items", {}).values())
         holistic = [f for f in issues if f.get("detail", {}).get("holistic")]
         assert len(holistic) == 1
 
@@ -247,7 +247,7 @@ class TestGenerateRemediationPlan:
                 "reasoning": "Reduces coupling",
             },
         )
-        empty_state["issues"][f["id"]] = f
+        empty_state["work_items"][f["id"]] = f
         empty_state["objective_score"] = 85.0
         empty_state["strict_score"] = 84.0
         empty_state["potentials"] = {"typescript": {"review": 50}}

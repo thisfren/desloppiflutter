@@ -1,5 +1,7 @@
 """Complexity signal detection: configurable per-language complexity signals."""
 
+from __future__ import annotations
+
 import inspect
 import logging
 import re
@@ -77,3 +79,6 @@ def detect_complexity(
             )
             continue
     return sorted(entries, key=lambda e: -e["score"]), len(files)
+
+
+__all__ = ["detect_complexity"]

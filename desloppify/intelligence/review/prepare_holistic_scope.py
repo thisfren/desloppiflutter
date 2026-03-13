@@ -124,8 +124,9 @@ def filter_batches_to_file_scope(
         if issue_focus is not None:
             batch["historical_issue_focus"] = issue_focus
 
-        # Keep any batch that has dimensions to review
-        if batch.get("dimensions"):
+        # Dimensions come from the original batch payload; this scope filter only trims
+        # file-linked fields such as concern signals and historical issue focus.
+        if raw_batch.get("dimensions"):
             scoped_batches.append(batch)
     return scoped_batches
 

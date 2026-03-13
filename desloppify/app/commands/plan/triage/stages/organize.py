@@ -22,8 +22,25 @@ from ..validation.organize_policy import (
     _unclustered_review_issues_or_error,
     _validate_organize_against_ledger_or_error,
 )
-from ..validation.core import _require_reflect_stage_for_organize
+from ..validation.stage_policy import require_prerequisite
 from .records import record_organize_stage
+
+
+def _require_reflect_stage_for_organize(stages: dict) -> bool:
+    return require_prerequisite(
+        stages,
+        flow="organize",
+        messages={
+            "observe": (
+                "  Cannot organize: observe stage not complete.",
+                '  Run: desloppify plan triage --stage observe --report "..."',
+            ),
+            "reflect": (
+                "  Cannot organize: reflect stage not complete.",
+                '  Run: desloppify plan triage --stage reflect --report "..."',
+            ),
+        },
+    )
 
 
 def _enforce_cluster_activity_for_organize(

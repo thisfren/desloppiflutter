@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import desloppify.languages._framework.base.shared_phases as shared_phases_mod
 from desloppify.languages._framework.base.shared_phases import phase_security
 from desloppify.languages._framework.base.types import LangSecurityResult
 
@@ -22,23 +21,21 @@ def _lang_stub(*, files_scanned: int):
     )
 
 
-def test_phase_security_uses_max_scan_count_with_lang_security_result(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        shared_phases_mod,
-        "detect_security_issues",
-        lambda _files, _zone, _lang, **_kwargs: ([], 2),
+def test_phase_security_uses_max_scan_count_with_lang_security_result(tmp_path):
+    issues, potentials = phase_security(
+        tmp_path,
+        _lang_stub(files_scanned=7),
+        detect_security_issues=lambda _files, _zone, _lang, **_kwargs: ([], 2),
     )
-    issues, potentials = phase_security(tmp_path, _lang_stub(files_scanned=7))
     assert issues == []
     assert potentials == {"security": 7}
 
 
-def test_phase_security_keeps_cross_lang_scan_count_when_larger(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        shared_phases_mod,
-        "detect_security_issues",
-        lambda _files, _zone, _lang, **_kwargs: ([], 9),
+def test_phase_security_keeps_cross_lang_scan_count_when_larger(tmp_path):
+    issues, potentials = phase_security(
+        tmp_path,
+        _lang_stub(files_scanned=3),
+        detect_security_issues=lambda _files, _zone, _lang, **_kwargs: ([], 9),
     )
-    issues, potentials = phase_security(tmp_path, _lang_stub(files_scanned=3))
     assert issues == []
     assert potentials == {"security": 9}

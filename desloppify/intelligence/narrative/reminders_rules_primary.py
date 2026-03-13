@@ -109,7 +109,7 @@ def _wontfix_debt_reminders(
         return reminders
 
     stale_wontfix = []
-    for issue in state.get("issues", {}).values():
+    for issue in (state.get("work_items") or state.get("issues", {})).values():
         if issue.get("status") != "wontfix":
             continue
         resolved_at = issue.get("resolved_at")

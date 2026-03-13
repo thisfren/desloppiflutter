@@ -14,7 +14,7 @@ def collect_structural_areas(
 ) -> list[tuple[str, list]] | None:
     """Collect T3/T4 structural issues grouped by area."""
     issues = path_scoped_issues(
-        state.get("issues", {}), state.get("scan_path")
+        (state.get("work_items") or state.get("issues", {})), state.get("scan_path")
     )
     structural = [
         issue

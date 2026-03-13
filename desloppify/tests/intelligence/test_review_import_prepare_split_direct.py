@@ -96,7 +96,7 @@ def test_holistic_cache_update_and_resolution_helpers(monkeypatch) -> None:
     )
     # naming_quality is assessed, so its issue should be resolved
     assert diff["auto_resolved"] == 1
-    assert state["issues"]["subjective_review::.::naming_quality"]["status"] == "fixed"
+    assert state["work_items"]["subjective_review::.::naming_quality"]["status"] == "fixed"
 
     # resolve_reviewed_file_coverage_issues is now a no-op
     diff = {"auto_resolved": 0}
@@ -168,7 +168,7 @@ def test_issue_flow_build_collect_and_auto_resolve_paths(monkeypatch) -> None:
         full_sweep_included=False,
     )
     assert diff["auto_resolved"] == 1
-    assert state["issues"]["review::old"]["status"] == "fixed"
+    assert state["work_items"]["review::old"]["status"] == "fixed"
 
 
 def test_resolution_and_state_helper_utilities() -> None:
@@ -188,7 +188,7 @@ def test_resolution_and_state_helper_utilities() -> None:
         utc_now_fn=lambda: "2026-03-09T00:00:00+00:00",
     )
     assert diff["auto_resolved"] == 1
-    assert state["issues"]["id1"]["status"] == "fixed"
+    assert state["work_items"]["id1"]["status"] == "fixed"
 
     cache = state_helpers_mod.ensure_review_file_cache({})
     assert cache == {}
@@ -357,6 +357,31 @@ def test_authorization_collector_uses_module_fallback_for_with_auth_siblings() -
     assert "routes/admin/audit.py" in files
     assert "routes/internal/guarded.py" in files
     assert "ui/home.py" not in files
+
+
+def test_authorization_collector_excludes_guidance_like_runtime_paths() -> None:
+    ctx = SimpleNamespace(
+        authorization={
+            "route_auth_coverage": {
+                "guidance/auth_examples.py": {
+                    "handlers": 1,
+                    "with_auth": 0,
+                    "without_auth": 1,
+                },
+                "src/routes/admin.py": {"handlers": 1, "with_auth": 0, "without_auth": 1},
+            },
+            "service_role_usage": ["prompts/security_prompt.ts", "src/lib/supabase.ts"],
+            "rls_coverage": {
+                "files": {
+                    "accounts": ["docs/rls_examples.sql", "db/schema.sql"],
+                }
+            },
+        }
+    )
+
+    files = collectors_structure_mod._authorization_files(ctx, max_files=10)
+
+    assert files == ["src/routes/admin.py", "src/lib/supabase.ts", "db/schema.sql"]
 
 
 def test_prepare_batches_core_path_normalization_rules() -> None:

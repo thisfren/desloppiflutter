@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
@@ -151,17 +152,29 @@ def _try_ruff(path: Path, category: str) -> list[dict] | None:
         return []
 
     exclude_dirs = _collect_exclude_dirs(path)
-    cmd = [
-        sys.executable,
-        "-m",
-        "ruff",
-        "check",
-        "--select",
-        ",".join(select),
-        "--output-format",
-        "json",
-        "--no-fix",
-    ]
+    ruff_executable = shutil.which("ruff")
+    if ruff_executable:
+        cmd = [
+            ruff_executable,
+            "check",
+            "--select",
+            ",".join(select),
+            "--output-format",
+            "json",
+            "--no-fix",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--select",
+            ",".join(select),
+            "--output-format",
+            "json",
+            "--no-fix",
+        ]
     if exclude_dirs:
         cmd.extend(["--exclude", ",".join(exclude_dirs)])
     cmd.append(str(path))
@@ -177,6 +190,8 @@ def _try_ruff(path: Path, category: str) -> list[dict] | None:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
+    if result.returncode not in (0, 1):
+        return None
     if not result.stdout.strip():
         return []
 

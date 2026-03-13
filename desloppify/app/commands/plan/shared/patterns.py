@@ -114,7 +114,7 @@ def resolve_ids_from_patterns(
 
     When *plan* is provided, literal IDs that exist only in the plan
     (e.g. ``subjective::*`` synthetic items) are included even if they
-    have no corresponding entry in ``state["issues"]``.
+    have no corresponding entry in ``state["work_items"]``.
     """
     seen: set[str] = set()
     result: list[str] = []

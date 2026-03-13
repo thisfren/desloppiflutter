@@ -5,6 +5,7 @@ from __future__ import annotations
 from desloppify.app.commands.helpers.query import write_query
 from desloppify.base.config import target_strict_score_from_config
 from desloppify.base.output.terminal import colorize
+from desloppify.engine._state.issue_semantics import is_triage_finding
 
 from .render import show_subjective_followup
 from .scope import _detector_names_hint, _lookup_dimension_score, load_matches
@@ -26,7 +27,7 @@ def _print_dimension_score(dim_data: dict, display_name: str) -> None:
 
 
 def _render_judgment(state: dict, dimension_key: str) -> None:
-    """Print judgment narrative (strengths, issue_character, score_rationale) if available."""
+    """Print judgment narrative (strengths, dimension_character, score_rationale) if available."""
     assessments = state.get("subjective_assessments", {})
     assessment = assessments.get(dimension_key, {})
     if not isinstance(assessment, dict):
@@ -48,10 +49,6 @@ def _render_judgment(state: dict, dimension_key: str) -> None:
     dim_char = judgment.get("dimension_character", "")
     if dim_char:
         print(colorize(f"  Dimension character: {dim_char}", "dim"))
-    else:
-        issue_character = judgment.get("issue_character", "")
-        if issue_character:
-            print(colorize(f"  Issue character: {issue_character}", "dim"))
 
 
 def _render_subjective_dimension(
@@ -74,8 +71,8 @@ def _render_subjective_dimension(
     )
     dim_reviews = [
         issue
-        for issue in (state.get("issues") or {}).values()
-        if issue.get("detector") == "review"
+        for issue in (state.get("work_items") or {}).values()
+        if is_triage_finding(issue)
         and issue.get("status") == "open"
         and lowered
         in str(issue.get("detail", {}).get("dimension", "")).lower().replace(" ", "_")
@@ -83,7 +80,7 @@ def _render_subjective_dimension(
     if dim_reviews:
         print(
             colorize(
-                f"  {len(dim_reviews)} open review issue(s). "
+                f"  {len(dim_reviews)} open review work item(s). "
                 "Run `show review --status open`.",
                 "dim",
             )
@@ -165,7 +162,7 @@ def _render_subjective_views_guide(entity) -> None:
         "subjective_review",
     ):
         print(colorize("  Related views:", "dim"))
-        print(colorize("    `show review --status open`            Per-file design review issues", "dim"))
+        print(colorize("    `show review --status open`            Per-file design review work items", "dim"))
         print(colorize("    `show subjective_review --status open`  Files needing re-review", "dim"))
 
 

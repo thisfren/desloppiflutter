@@ -35,12 +35,13 @@ def _print_wontfix_batch_warning(
 ) -> None:
     if status != "wontfix" or resolved_count <= 10:
         return
+    work_items = state.get("work_items") or state.get("issues", {})
     wontfix_count = sum(
-        1 for issue in state["issues"].values() if issue["status"] == "wontfix"
+        1 for issue in work_items.values() if issue["status"] == "wontfix"
     )
     actionable = sum(
         1
-        for issue in state["issues"].values()
+        for issue in work_items.values()
         if issue["status"]
         in ("open", "wontfix", "fixed", "auto_resolved", "false_positive")
     )
@@ -114,8 +115,9 @@ def _print_subjective_reset_hint(
     all_resolved: list[str],
     prev_subjective_scores: dict[str, float],
 ) -> None:
+    work_items = state.get("work_items") or state.get("issues", {})
     has_review = any(
-        state["issues"].get(fid, {}).get("detector") == "review"
+        work_items.get(fid, {}).get("detector") == "review"
         for fid in all_resolved
     )
     if not has_review or not state.get("subjective_assessments"):
@@ -125,10 +127,10 @@ def _print_subjective_reset_hint(
         dim
         for dim in {
             str(
-                state["issues"].get(fid, {}).get("detail", {}).get("dimension", "")
+                work_items.get(fid, {}).get("detail", {}).get("dimension", "")
             ).strip()
             for fid in all_resolved
-            if state["issues"].get(fid, {}).get("detector") == "review"
+            if work_items.get(fid, {}).get("detector") == "review"
         }
         if dim and dim in (state.get("subjective_assessments") or {})
     )
@@ -236,9 +238,10 @@ def render_commit_guidance(
 
 
 def _print_next_command(state: dict) -> str:
+    work_items = state.get("work_items") or state.get("issues", {})
     remaining = sum(
         1
-        for issue in state["issues"].values()
+        for issue in work_items.values()
         if issue["status"] == "open"
         and not issue.get("suppressed")
     )

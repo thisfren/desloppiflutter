@@ -104,7 +104,7 @@ def _zone_set(args: argparse.Namespace):
         sp = state_path(args)
         if sp.exists():
             state = load_state(sp)
-            issues = state.get("issues", {})
+            issues = (state.get("work_items") or state.get("issues", {}))
             updated = 0
             for issue in issues.values():
                 if issue.get("file") == normalized:
@@ -138,7 +138,7 @@ def _zone_clear(args: argparse.Namespace):
             sp = state_path(args)
             if sp.exists():
                 state = load_state(sp)
-                issues = state.get("issues", {})
+                issues = (state.get("work_items") or state.get("issues", {}))
                 updated = 0
                 for issue in issues.values():
                     if issue.get("file") == normalized:

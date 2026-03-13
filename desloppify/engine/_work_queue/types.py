@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypeAlias, TypedDict
 
+from desloppify.engine.plan_state import ActionStep
+
 QueueItemKind: TypeAlias = Literal[
     "issue",
     "cluster",
@@ -19,7 +21,7 @@ class PlanClusterRef(TypedDict, total=False):
     name: str
     description: str | None
     total_items: int
-    action_steps: list[dict[str, Any]]
+    action_steps: list[ActionStep]
 
 
 class QueueItemBase(TypedDict):
@@ -34,6 +36,9 @@ class QueueItemCommon(QueueItemBase, total=False):
     """Optional fields shared across multiple queue item variants."""
 
     detector: str
+    work_item_kind: str
+    issue_kind: str
+    origin: str
     file: str
     confidence: str
     detail: dict[str, Any]
@@ -54,6 +59,8 @@ class QueueItemCommon(QueueItemBase, total=False):
     estimated_impact: float
     primary_command: str
     action_type: str
+    execution_policy: str
+    execution_status: str
     explain: dict[str, Any]
 
     # Plan-order metadata
@@ -79,6 +86,7 @@ class QueueItemCommon(QueueItemBase, total=False):
     epic_triage_meta: dict[str, Any]
     fixers: list[str]
     issue_ids: list[str]
+    work_items: dict[str, Any]
     issues: dict[str, Any]
     lang_capabilities: dict[str, Any]
     name: str
@@ -93,8 +101,8 @@ class QueueItemCommon(QueueItemBase, total=False):
     triage_stages: dict[str, Any]
 
 
-class IssueQueueItem(QueueItemCommon, total=False):
-    """Concrete queue item for a detector finding."""
+class WorkItemQueueItem(QueueItemCommon, total=False):
+    """Concrete queue item for one tracked work item."""
 
     tier: int
 
@@ -182,11 +190,12 @@ class SerializedQueueItem(TypedDict, total=False):
     members_truncated: bool
     members_sample_limit: int
     autofix_hint: str
-    action_steps: list[dict[str, Any]]
+    execution_policy: str
+    action_steps: list[ActionStep]
 
 
 WorkQueueItem: TypeAlias = (
-    IssueQueueItem
+    WorkItemQueueItem
     | ClusterQueueItem
     | WorkflowStageItem
     | WorkflowActionItem
@@ -197,7 +206,6 @@ WorkQueueGroups: TypeAlias = dict[str, list[WorkQueueItem]]
 
 __all__ = [
     "ClusterQueueItem",
-    "IssueQueueItem",
     "PlanClusterRef",
     "QueueItemBase",
     "QueueItemCommon",
@@ -209,4 +217,5 @@ __all__ = [
     "WorkflowStageItem",
     "WorkQueueGroups",
     "WorkQueueItem",
+    "WorkItemQueueItem",
 ]

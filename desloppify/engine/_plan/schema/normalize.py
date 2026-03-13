@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from desloppify.engine._plan.cluster_semantics import normalize_cluster_semantics
+
 _HEX_SUFFIX_RE = re.compile(r"^[0-9a-f]{8}$")
 
 
@@ -206,6 +208,7 @@ def normalize_cluster_defaults(plan: dict[str, Any]) -> None:
         cluster.setdefault("cluster_key", "")
         cluster.setdefault("action", None)
         cluster.setdefault("user_modified", False)
+        normalize_cluster_semantics(cluster)
 
 
 def _append_normalized_issue_id(

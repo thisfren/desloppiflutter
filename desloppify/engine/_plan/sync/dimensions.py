@@ -18,7 +18,12 @@ from __future__ import annotations
 
 from desloppify.base.config import DEFAULT_TARGET_STRICT_SCORE
 from desloppify.engine._plan.policy import stale as stale_policy_mod
-from desloppify.engine._plan.constants import SUBJECTIVE_PREFIX, QueueSyncResult
+from desloppify.engine._plan.constants import (
+    SUBJECTIVE_PREFIX,
+    QueueSyncResult,
+    is_triage_id,
+    is_workflow_id,
+)
 from desloppify.engine._plan.schema import PlanModel, ensure_plan_defaults
 from desloppify.engine._plan.policy.subjective import SubjectiveVisibility
 from desloppify.engine._state.schema import StateModel
@@ -167,9 +172,7 @@ def _promote_subjective_ids(order: list[str], ids: list[str]) -> int:
     insert_at = 0
     while insert_at < len(order):
         current = str(order[insert_at])
-        if not (
-            current.startswith("workflow::") or current.startswith("triage::")
-        ):
+        if not (is_workflow_id(current) or is_triage_id(current)):
             break
         insert_at += 1
 

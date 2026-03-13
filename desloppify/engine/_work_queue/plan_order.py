@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from desloppify.base.registry import DETECTORS
+from desloppify.engine._plan.cluster_membership import cluster_issue_ids
+from desloppify.engine._plan.cluster_semantics import (
+    cluster_autofix_hint,
+    infer_cluster_action_type,
+    infer_cluster_execution_policy,
+)
 from desloppify.engine.plan_ops import (
     get_issue_description,
     get_issue_note,
@@ -12,15 +17,6 @@ from desloppify.engine.plan_ops import (
 )
 from desloppify.engine._work_queue.types import WorkQueueItem
 from desloppify.state_io import StateModel
-
-
-def _cluster_issue_ids(cluster: dict[str, Any]) -> list[str]:
-    """Return canonical cluster members after plan-load normalization."""
-    issue_ids = cluster.get("issue_ids", [])
-    if not isinstance(issue_ids, list):
-        return []
-    return [issue_id for issue_id in issue_ids if isinstance(issue_id, str) and issue_id]
-
 
 def new_item_ids(state: StateModel) -> set[str]:
     """Return issue IDs added in the most recent scan."""
@@ -32,7 +28,7 @@ def new_item_ids(state: StateModel) -> set[str]:
         return set()
     return {
         issue_id
-        for issue_id, issue in state.get("issues", {}).items()
+        for issue_id, issue in (state.get("work_items") or state.get("issues", {})).items()
         if issue.get("first_seen", "") >= threshold
     }
 
@@ -56,7 +52,7 @@ def enrich_plan_metadata(items: list[WorkQueueItem], plan: dict) -> None:
             item["plan_cluster"] = {
                 "name": cluster_name,
                 "description": cluster_data.get("description"),
-                "total_items": len(_cluster_issue_ids(cluster_data)),
+                "total_items": len(cluster_issue_ids(cluster_data)),
                 "action_steps": cluster_data.get("action_steps") or [],
             }
 
@@ -118,7 +114,7 @@ def filter_cluster_focus(
         return items
     clusters: dict = plan.get("clusters", {})
     cluster_data = clusters.get(effective_cluster, {})
-    cluster_member_ids = set(_cluster_issue_ids(cluster_data))
+    cluster_member_ids = set(cluster_issue_ids(cluster_data))
     if not cluster_member_ids:
         return items
     return [item for item in items if item["id"] in cluster_member_ids]
@@ -141,43 +137,26 @@ def stamp_positions(items: list[WorkQueueItem], plan: dict) -> None:
                     item["plan_skip_reason"] = skip_reason
 
 
-def action_type_for_detector(detector: str) -> str:
-    """Look up the action_type for a detector from the registry."""
-    meta = DETECTORS.get(detector)
-    if meta:
-        return meta.action_type
-    return "manual_fix"
-
-
 def _build_cluster_meta(
     cluster_name: str, members: list[WorkQueueItem], cluster_data: dict[str, Any]
 ) -> WorkQueueItem:
     """Build a cluster meta-item from its member items."""
     detector = members[0].get("detector", "") if members else ""
-    action = cluster_data.get("action") or ""
-    if "desloppify autofix" in action:
-        action_type = "auto_fix"
-    elif "desloppify move" in action:
-        action_type = "reorganize"
-    else:
-        action_type = action_type_for_detector(detector)
-        if action_type == "auto_fix" and "desloppify autofix" not in action:
-            action_type = "refactor"
+    action_type = infer_cluster_action_type(cluster_data, detector=detector)
 
     stored_desc = cluster_data.get("description") or ""
-    total_in_cluster = len(_cluster_issue_ids(cluster_data))
+    total_in_cluster = len(cluster_issue_ids(cluster_data))
     if stored_desc and total_in_cluster != len(members):
         summary = stored_desc.replace(str(total_in_cluster), str(len(members)))
     else:
         summary = stored_desc or f"{len(members)} issues"
 
     action = cluster_data.get("action") or ""
-    if "desloppify autofix" in action:
+    autofix_hint = cluster_autofix_hint(cluster_data, detector=detector)
+    if autofix_hint:
         primary_command = f"desloppify next --cluster {cluster_name} --count 10"
-        autofix_hint = action
     else:
         primary_command = action or f"desloppify next --cluster {cluster_name} --count 10"
-        autofix_hint = None
 
     estimated_impact = max(
         (m.get("estimated_impact", 0.0) for m in members), default=0.0
@@ -195,6 +174,11 @@ def _build_cluster_meta(
         "cluster_name": cluster_name,
         "cluster_auto": bool(cluster_data.get("auto")),
         "cluster_optional": bool(cluster_data.get("optional")),
+        "execution_policy": infer_cluster_execution_policy(
+            cluster_data,
+            detector=detector,
+        ),
+        "execution_status": cluster_data.get("execution_status", "review"),
         "confidence": "high",
         "detector": detector,
         "file": "",
@@ -216,7 +200,7 @@ def collapse_clusters(items: list[WorkQueueItem], plan: dict) -> list[WorkQueueI
 
     fid_to_cluster: dict[str, str] = {}
     for name, cluster in clusters.items():
-        for issue_id in _cluster_issue_ids(cluster):
+        for issue_id in cluster_issue_ids(cluster):
             # Manual clusters take priority when an issue is in both
             if issue_id not in fid_to_cluster or not cluster.get("auto"):
                 fid_to_cluster[issue_id] = name

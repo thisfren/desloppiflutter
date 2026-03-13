@@ -48,7 +48,7 @@ def test_update_investigation_persists_detail_and_timestamp() -> None:
     updated = issues_mod.update_investigation(state, "review::a", "looked into this")
 
     assert updated is True
-    detail = state["issues"]["review::a"]["detail"]
+    detail = state["work_items"]["review::a"]["detail"]
     assert detail["existing"] == "value"
     assert detail["investigation"] == "looked into this"
     datetime.fromisoformat(detail["investigated_at"])
@@ -96,8 +96,8 @@ def test_mark_stale_holistic_marks_old_entries_stale_only() -> None:
     expired = issues_mod.mark_stale_holistic(state, max_age_days=30)
 
     assert expired == ["review::stale"]
-    stale_issue = state["issues"]["review::stale"]
+    stale_issue = state["work_items"]["review::stale"]
     assert stale_issue["status"] == "open"
     assert stale_issue["note"].startswith("holistic review stale")
-    assert state["issues"]["review::fresh"]["status"] == "open"
-    assert state["issues"]["review::bad-time"]["status"] == "open"
+    assert state["work_items"]["review::fresh"]["status"] == "open"
+    assert state["work_items"]["review::bad-time"]["status"] == "open"

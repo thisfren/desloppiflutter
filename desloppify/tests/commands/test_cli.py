@@ -879,17 +879,16 @@ class TestResolveLang:
         assert "deno.json" in markers
         assert "custom.lock" in markers
 
-    def test_lang_config_markers_raises_for_broken_plugin(self, monkeypatch):
+    def test_lang_config_markers_skips_broken_plugin(self, monkeypatch):
         monkeypatch.setattr("desloppify.languages.framework.available_langs", lambda: ["dummy"])
         monkeypatch.setattr(
             "desloppify.languages.framework.get_lang",
             lambda _name: (_ for _ in ()).throw(ImportError("broken plugin")),
         )
 
-        with pytest.raises(lang_helpers_mod.LangResolutionError) as exc:
-            lang_helpers_mod._lang_config_markers()
-
-        assert "failed to load" in str(exc.value)
+        markers = lang_helpers_mod._lang_config_markers()
+        assert "deno.json" not in markers
+        assert "custom.lock" not in markers
 
     def test_lang_config_markers_refresh_after_plugin_change(self, monkeypatch):
         class FirstCfg:

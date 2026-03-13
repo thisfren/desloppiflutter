@@ -6,6 +6,13 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from desloppify.base.registry import DETECTORS
+from desloppify.engine._plan.cluster_semantics import (
+    EXECUTION_STATUS_ACTIVE,
+    EXECUTION_STATUS_REVIEW,
+    EXECUTION_POLICY_EPHEMERAL_AUTOPROMOTE,
+    infer_cluster_execution_policy,
+    normalize_cluster_semantics,
+)
 from desloppify.engine._plan.cluster_strategy import (
     cluster_name_from_key as _cluster_name_from_key,
 )
@@ -20,6 +27,19 @@ from desloppify.engine._plan.cluster_strategy import (
 )
 
 _MIN_CLUSTER_SIZE = 2
+
+
+def _auto_cluster_execution_status(
+    cluster: dict,
+    *,
+    detector: str = "",
+) -> str:
+    if (
+        infer_cluster_execution_policy(cluster, detector=detector)
+        == EXECUTION_POLICY_EPHEMERAL_AUTOPROMOTE
+    ):
+        return EXECUTION_STATUS_ACTIVE
+    return EXECUTION_STATUS_REVIEW
 
 
 @dataclass(frozen=True)
@@ -107,6 +127,7 @@ def _sync_auto_cluster(
     description: str,
     action: str,
     now: str,
+    detector: str = "",
     optional: bool = False,
 ) -> AutoClusterSyncResult:
     """Create/update one auto-cluster and report the mutation outcome.
@@ -133,6 +154,14 @@ def _sync_auto_cluster(
             cluster["action"] = action
             cluster["updated_at"] = now
             changes = 1
+        execution_status = _auto_cluster_execution_status(cluster, detector=detector)
+        if cluster.get("execution_status") != execution_status:
+            cluster["execution_status"] = execution_status
+            cluster["updated_at"] = now
+            changes = 1
+        if normalize_cluster_semantics(cluster, detector=detector):
+            cluster["updated_at"] = now
+            changes = 1
     else:
         new_cluster = {
             "name": cluster_name,
@@ -143,10 +172,15 @@ def _sync_auto_cluster(
             "auto": True,
             "cluster_key": cluster_key,
             "action": action,
+            "execution_status": _auto_cluster_execution_status(
+                {"auto": True, "action": action},
+                detector=detector,
+            ),
             "user_modified": False,
         }
         if optional:
             new_cluster["optional"] = True
+        normalize_cluster_semantics(new_cluster, detector=detector)
         clusters[cluster_name] = new_cluster
         existing_by_key[cluster_key] = cluster_name
         changes = 1
@@ -224,6 +258,7 @@ def sync_issue_clusters(
             description=description,
             action=action,
             now=now,
+            detector=detector,
         )
         changes += int(sync_result.changed)
 

@@ -386,7 +386,8 @@ def show_detector_progress(
     colorize_fn: Callable[[str, str], str],
 ) -> None:
     """Show per-detector progress bars."""
-    issues = state_mod.path_scoped_issues(state["issues"], state.get("scan_path"))
+    work_items = state.get("work_items") or state.get("issues", {})
+    issues = state_mod.path_scoped_issues(work_items, state.get("scan_path"))
     if not issues:
         return
 

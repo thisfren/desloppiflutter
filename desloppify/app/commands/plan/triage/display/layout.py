@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from desloppify.app.commands.helpers.issue_id_display import short_issue_id
+from desloppify.engine._plan.constants import is_synthetic_id
 from desloppify.engine.plan_triage import TriageSnapshot
 from desloppify.engine.plan_triage import (
     TRIAGE_CMD_CLUSTER_ADD,
@@ -56,9 +57,10 @@ def print_dashboard_header(
     snapshot: TriageSnapshot | None = None,
 ) -> None:
     """Print the header section: title, open issues count, stage progress, overall status."""
+    review_issues = getattr(si, "review_issues", getattr(si, "open_issues", {}))
     print(colorize("  Cluster triage", "bold"))
     print(colorize("  " + "─" * 60, "dim"))
-    print(f"  Open review issues: {len(si.open_issues)}")
+    print(f"  Open review issues: {len(review_issues)}")
     print(colorize("  Goal: identify contradictions, resolve them, then group the coherent", "cyan"))
     print(colorize("  remainder into clusters by root cause with action steps and priorities.", "cyan"))
     print(colorize("  Preferred: staged runner workflow (Codex or Claude).", "cyan"))
@@ -74,7 +76,7 @@ def print_dashboard_header(
     if new_since_last:
         print(colorize(f"  New since last triage: {len(new_since_last)}", "yellow"))
         for fid in sorted(new_since_last):
-            issue = si.open_issues.get(fid, {})
+            issue = review_issues.get(fid, {})
             dim = ""
             detail = issue.get("detail")
             if isinstance(detail, dict):
@@ -288,7 +290,7 @@ def show_plan_summary(plan: dict, state: dict) -> None:
         for name, cluster in clusters.items()
         if cluster_issue_ids(cluster) and not cluster.get("auto")
     }
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
 
     if active:
         print(colorize(f"\n  Clusters ({len(active)}):", "bold"))
@@ -301,7 +303,7 @@ def show_plan_summary(plan: dict, state: dict) -> None:
     queue_order = [
         fid
         for fid in plan.get("queue_order", [])
-        if not fid.startswith("triage::") and not fid.startswith("workflow::")
+        if not is_synthetic_id(fid)
     ]
     if queue_order:
         show = min(15, len(queue_order))

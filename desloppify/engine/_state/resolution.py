@@ -12,6 +12,7 @@ __all__ = [
 
 from desloppify.base.text_utils import is_numeric
 from desloppify.engine._state.filtering import _matches_pattern
+from desloppify.engine._state.issue_semantics import is_review_finding
 from desloppify.engine._state.schema import (
     StateModel,
     ensure_state_defaults,
@@ -72,7 +73,7 @@ def _mark_stale_assessments_on_review_resolve(
 
     touched_dimensions: set[str] = set()
     for issue in resolved_issues:
-        if issue.get("detector") != "review":
+        if not is_review_finding(issue):
             continue
         dimension = str(issue.get("detail", {}).get("dimension", "")).strip()
         if dimension:
@@ -103,7 +104,7 @@ def match_issues(
     ensure_state_defaults(state)
     return [
         issue
-        for issue_id, issue in state["issues"].items()
+        for issue_id, issue in state["work_items"].items()
         if not issue.get("suppressed")
         if (status_filter == "all" or issue["status"] == status_filter)
         and _matches_pattern(issue_id, issue, pattern)
@@ -132,7 +133,7 @@ def resolve_issues(
         original_issue_id = detail.get("original_issue_id")
         if not isinstance(original_issue_id, str) or not original_issue_id:
             return
-        original = state["issues"].get(original_issue_id)
+        original = state["work_items"].get(original_issue_id)
         if not isinstance(original, dict) or original.get("status") != "wontfix":
             return
         snapshot_scan_count = int(state.get("scan_count", 0) or 0)

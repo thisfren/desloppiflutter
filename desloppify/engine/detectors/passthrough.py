@@ -4,6 +4,8 @@ Language-specific extraction lives in language plugins. This module provides
 the shared core that classifies parameters as passthrough vs direct-use.
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Callable
 
@@ -52,3 +54,6 @@ def classify_params(
         else:
             direct.append(name)
     return passthrough, direct
+
+
+__all__ = ["classify_params", "classify_passthrough_tier"]

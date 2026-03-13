@@ -61,7 +61,7 @@ def test_compute_triage_progress_blocks_sense_check_until_enrich_confirmed() -> 
     assert progress.current_stage is None
     assert progress.next_command == "desloppify plan triage --confirm enrich"
     assert progress.blocked_reason == (
-        "Verify accuracy & cross-cluster deps blocked until Make steps executor-ready (detail, refs) is confirmed."
+        "Verify accuracy, structure & value blocked until Make steps executor-ready (detail, refs) is confirmed."
     )
 
 

@@ -75,7 +75,7 @@ def test_issue_history_returns_flat_recent_issues():
         note="blocked by migration dependency",
         resolved_at="2026-02-24T12:00:00+00:00",
     )
-    state["issues"] = {
+    state["work_items"] = {
         f_open["id"]: f_open,
         f_fixed["id"]: f_fixed,
         f_wontfix["id"]: f_wontfix,
@@ -122,7 +122,7 @@ def test_issue_history_strips_auto_resolve_notes():
         note="not reported in latest holistic re-import",
         resolved_at="2026-02-24T11:00:00+00:00",
     )
-    state["issues"] = {f["id"]: f}
+    state["work_items"] = {f["id"]: f}
 
     history = build_issue_history_context(state)
     assert history["recent_issues"][0]["note"] == ""
@@ -130,7 +130,7 @@ def test_issue_history_strips_auto_resolve_notes():
 
 def test_issue_history_respects_max_issues():
     state = empty_state()
-    state["issues"] = {}
+    state["work_items"] = {}
     for idx in range(10):
         f = _review_issue(
             issue_id=f"review::.::holistic::abstraction_fitness::issue_{idx}",
@@ -139,7 +139,7 @@ def test_issue_history_respects_max_issues():
             summary=f"Issue number {idx}",
             last_seen=f"2026-02-{20 + idx % 5}T10:00:00+00:00",
         )
-        state["issues"][f["id"]] = f
+        state["work_items"][f["id"]] = f
 
     history = build_issue_history_context(
         state, options=ReviewHistoryOptions(max_issues=5)
@@ -164,7 +164,7 @@ def test_issue_history_sorted_by_last_seen():
         last_seen="2026-02-24T10:00:00+00:00",
     )
     state = empty_state()
-    state["issues"] = {f_old["id"]: f_old, f_new["id"]: f_new}
+    state["work_items"] = {f_old["id"]: f_old, f_new["id"]: f_new}
 
     history = build_issue_history_context(state)
     issues = history["recent_issues"]
@@ -181,7 +181,7 @@ def test_issue_history_empty_state():
 
 def test_prepare_holistic_review_optional_issue_history_payload():
     state = empty_state()
-    state["issues"] = {
+    state["work_items"] = {
         "review::.::holistic::error_consistency::mixed_error_channels_console_vs_pipeline": _review_issue(
             issue_id="review::.::holistic::error_consistency::mixed_error_channels_console_vs_pipeline",
             dimension="error_consistency",

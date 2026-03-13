@@ -91,8 +91,8 @@ def test_cmd_exclude_prunes_matching_issues_and_plan(
 
     exclude_mod.cmd_exclude(_args(".claude", runtime))
 
-    assert removed_id not in state["issues"]
-    assert kept_id in state["issues"]
+    assert removed_id not in state["work_items"]
+    assert kept_id in state["work_items"]
     assert state["subjective_assessments"]["naming_quality"]["score"] == 81
     assert saved_state["path"] == state_file
 

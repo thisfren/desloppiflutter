@@ -132,8 +132,11 @@ def resolve_holistic_coverage_issues(
     assessed = _assessed_dimension_keys(state)
     if not assessed:
         return
+    work_items = state.get("work_items") or state.get("issues", {})
+    state["work_items"] = work_items
+    state["issues"] = work_items
     now = utc_now_fn()
-    for issue in state.get("issues", {}).values():
+    for issue in work_items.values():
         if issue.get("status") != "open":
             continue
         if issue.get("detector") != "subjective_review":

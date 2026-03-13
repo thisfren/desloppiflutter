@@ -1,4 +1,4 @@
-"""Rendering and scoring helpers for issue work orders."""
+"""Rendering and scoring helpers for work-item work orders."""
 
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ from desloppify.base.scoring_constants import (
     CONFIDENCE_WEIGHTS,
     HOLISTIC_MULTIPLIER,
 )
+from desloppify.engine._state.issue_semantics import is_triage_finding
 
 logger = logging.getLogger(__name__)
 
 
 def issue_weight(issue: dict) -> tuple[float, float, str]:
-    """Compute (weight, impact_pts, issue_id) for a issue."""
+    """Compute (weight, impact_pts, work_item_id) for a tracked work item."""
     confidence = issue.get("confidence", "low")
     is_holistic = issue.get("detail", {}).get("holistic", False)
 
@@ -46,7 +47,7 @@ def _append_assessment_context(
         f"({source} review, {assessed_at})"
     )
     lines.append(
-        "Fixing this issue and re-reviewing should improve the "
+        "Fixing this work item and re-reviewing should improve the "
         f"{display_dimension} score.\n"
     )
 
@@ -150,12 +151,12 @@ def render_issue_detail(
     number: int | None = None,
     subjective_assessments: dict | None = None,
 ) -> str:
-    """Render one issue as a markdown work order from state."""
+    """Render one tracked work item as a markdown work order from state."""
     issue_id = issue["id"]
     detail = issue.get("detail", {})
     detector = issue.get("detector", "")
     is_holistic = detail.get("holistic", False)
-    is_review = detector in ("review", "concerns")
+    is_review = is_triage_finding(issue)
 
     # Derive dimension: from detail for review, from registry for mechanical.
     raw_dimension = detail.get("dimension", "")
@@ -174,7 +175,7 @@ def render_issue_detail(
 
     lines: list[str] = []
     lines.append(f"# {dimension}: {identifier}\n")
-    lines.append(f"**Issue**: `{issue_id}`  ")
+    lines.append(f"**Work item**: `{issue_id}`  ")
     if not is_review:
         meta = DETECTORS.get(detector)
         detector_display = meta.display if meta else detector

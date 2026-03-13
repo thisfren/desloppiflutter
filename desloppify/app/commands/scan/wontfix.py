@@ -147,7 +147,7 @@ def augment_with_stale_wontfix_issues(
     decay_scans: int,
 ) -> tuple[list[dict[str, Any]], int]:
     """Append re-triage issues for stale or worsening wontfix debt."""
-    existing = state.get("issues", {})
+    existing = (state.get("work_items") or state.get("issues", {}))
     if not isinstance(existing, dict):
         return issues, 0
 

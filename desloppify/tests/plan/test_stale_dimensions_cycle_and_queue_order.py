@@ -49,7 +49,7 @@ def test_cycle_completed_injects_stale_despite_objective_backlog():
     """After a completed cycle, stale dims inject even with new objective issues."""
     plan = _plan_with_queue("some_issue::file.py::abc123")
     state = _state_with_stale_dimensions("design_coherence", "error_consistency")
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -73,7 +73,7 @@ def test_cycle_completed_appends_to_back():
     """Post-cycle stale injection appends to back, preserving existing order."""
     plan = _plan_with_queue("issue_a", "issue_b")
     state = _state_with_stale_dimensions("design_coherence")
-    state["issues"]["issue_a"] = {
+    state["work_items"]["issue_a"] = {
         "id": "issue_a", "status": "open", "detector": "smells",
     }
 
@@ -90,7 +90,7 @@ def test_cycle_completed_injects_under_target_dims():
     # Dimension is below target but NOT stale (no needs_review_refresh)
     state = _state_with_stale_dimensions("design_coherence")
     state["subjective_assessments"]["design_coherence"]["needs_review_refresh"] = False
-    state["issues"]["some_issue::file.py::abc123"] = {
+    state["work_items"]["some_issue::file.py::abc123"] = {
         "id": "some_issue::file.py::abc123",
         "status": "open",
         "detector": "smells",
@@ -121,7 +121,8 @@ def test_under_target_injected_when_no_objective_backlog():
 def test_cycle_completed_no_stale_dims_no_injection():
     """cycle_just_completed has no effect when no stale dims exist."""
     plan = _plan_with_queue("some_issue::file.py::abc123")
-    state = {"issues": {}, "scan_count": 5}
+    work_items: dict[str, dict] = {}
+    state = {"work_items": work_items, "issues": work_items, "scan_count": 5}
 
     result = sync_subjective_dimensions(plan, state, cycle_just_completed=True)
     assert result.injected == []
@@ -164,10 +165,12 @@ def test_triage_appends_to_back():
 
     plan = _plan_with_queue("issue_a", "issue_b")
     plan["epic_triage_meta"] = {"issue_snapshot_hash": "old_hash"}
+    work_items = {
+        "review::file.py::abc": {"status": "open", "detector": "review"},
+    }
     state = {
-        "issues": {
-            "review::file.py::abc": {"status": "open", "detector": "review"},
-        },
+        "work_items": work_items,
+        "issues": work_items,
         "scan_count": 5,
     }
 

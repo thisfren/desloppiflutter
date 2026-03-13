@@ -111,7 +111,7 @@ def test_cascade_unused_import_cleanup_resolves_cascade_issues(monkeypatch, caps
         lang=lang,
     )
 
-    issue = state["issues"]["unused::src/a.ts::Foo"]
+    issue = state["work_items"]["unused::src/a.ts::Foo"]
     assert issue["status"] == "fixed"
     assert "cascade-unused-imports" in str(issue["note"])
 

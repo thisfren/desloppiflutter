@@ -387,7 +387,7 @@ class TestIDCollision:
         _ = _call_import_review_issues(issues_data, state, "python")
 
         # Same file+dimension+identifier → same issue ID (last writer wins)
-        ids = list(state["issues"].keys())
+        ids = list(state["work_items"].keys())
         assert len(ids) == 1
 
     def test_same_identifier_collapses_without_evidence_lines(self):
@@ -417,7 +417,7 @@ class TestIDCollision:
         state = empty_state()
         _ = _call_import_review_issues(issues_data, state, "python")
 
-        ids = list(state["issues"].keys())
+        ids = list(state["work_items"].keys())
         assert len(ids) == 1
 
     def test_same_issue_same_id(self):
@@ -436,7 +436,7 @@ class TestIDCollision:
         ]
         state = empty_state()
         _call_import_review_issues(issues_data, state, "python")
-        id1 = list(state["issues"].keys())[0]
+        id1 = list(state["work_items"].keys())[0]
 
         # Re-import same issue
         state2 = empty_state()
@@ -485,7 +485,7 @@ class TestNewDimensions:
             ]
             state = empty_state()
             _call_import_review_issues(issues_data, state, "python")
-            assert len(state["issues"]) == 1, f"Issue for {dim} was rejected"
+            assert len(state["work_items"]) == 1, f"Issue for {dim} was rejected"
 
 
 # ── Registry and scoring integration ─────────────────────────────

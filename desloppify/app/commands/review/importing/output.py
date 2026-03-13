@@ -297,18 +297,18 @@ def print_assessments_summary(state: StateModel, *, colorize_fn) -> None:
 
 
 def print_open_review_summary(state: StateModel, *, colorize_fn) -> str:
-    """Print current open review issue count and return next command."""
+    """Print current open review work item count and return next command."""
+    work_items = state.get("work_items") or state.get("issues", {})
     open_review = [
         issue
-        for issue in state["issues"].values()
+        for issue in work_items.values()
         if issue["status"] == "open" and issue.get("detector") == "review"
     ]
     if not open_review:
         return "desloppify scan"
     print(
         colorize_fn(
-            f"\n  {len(open_review)} review issue{'s' if len(open_review) != 1 else ''} open total "
-            f"({len(open_review)} review issue{'s' if len(open_review) != 1 else ''} open total)",
+            f"\n  {len(open_review)} review work item{'s' if len(open_review) != 1 else ''} open total",
             "bold",
         )
     )
@@ -320,7 +320,6 @@ def print_review_import_scores_and_integrity(
     state: StateModel,
     config: dict[str, Any],
     *,
-    state_mod,
     target_strict_score_from_config_fn,
     subjective_at_target_fn,
     subjective_rerun_command_fn,

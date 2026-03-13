@@ -50,8 +50,9 @@ def gather_subjective_items(
 
     candidates = build_subjective_items(
         state,
-        state.get("issues", {}),
+        (state.get("work_items") or state.get("issues", {})),
         threshold=threshold,
+        plan=opts.context.plan if opts.context is not None else opts.plan,
     )
     return [item for item in candidates if scope_matches(item, opts.scope)]
 

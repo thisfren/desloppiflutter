@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from desloppify.base.config import DEFAULT_TARGET_STRICT_SCORE
+from desloppify.engine._plan.cluster_semantics import cluster_is_active
 from desloppify.engine._plan.constants import AUTO_PREFIX
 from desloppify.engine._plan.auto_cluster_sync import (
     prune_stale_clusters as _prune_stale_clusters,
@@ -11,6 +12,7 @@ from desloppify.engine._plan.auto_cluster_sync import (
 )
 from desloppify.engine._plan.schema import PlanModel, ensure_plan_defaults
 from desloppify.engine._plan.policy.subjective import SubjectiveVisibility
+from desloppify.engine._plan.sync.context import is_mid_cycle
 from desloppify.engine._state.schema import StateModel, utc_now
 
 # ---------------------------------------------------------------------------
@@ -144,6 +146,28 @@ def _sync_auto_clusters(
     return changes
 
 
+def _sync_active_auto_cluster_queue_membership(plan: PlanModel) -> int:
+    order: list[str] = plan.get("queue_order", [])
+    skipped = set(plan.get("skipped", {}).keys())
+    existing = set(order)
+    added = 0
+    for cluster in plan.get("clusters", {}).values():
+        if not isinstance(cluster, dict) or not cluster.get("auto") or not cluster_is_active(cluster):
+            continue
+        for issue_id in cluster.get("issue_ids", []):
+            if (
+                not isinstance(issue_id, str)
+                or not issue_id
+                or issue_id in skipped
+                or issue_id in existing
+            ):
+                continue
+            order.append(issue_id)
+            existing.add(issue_id)
+            added += 1
+    return added
+
+
 def auto_cluster_issues(
     plan: PlanModel,
     state: StateModel,
@@ -156,8 +180,10 @@ def auto_cluster_issues(
     Returns count of changes made (clusters created, updated, or deleted).
     """
     ensure_plan_defaults(plan)
+    if is_mid_cycle(plan):
+        return 0
 
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     clusters = plan.get("clusters", {})
 
     now = utc_now()
@@ -172,6 +198,7 @@ def auto_cluster_issues(
         policy=policy,
     )
     changes += _repair_ghost_cluster_refs(plan, now)
+    changes += _sync_active_auto_cluster_queue_membership(plan)
 
     plan["updated"] = now
     return changes

@@ -76,7 +76,7 @@ def _related_files(issue: dict[str, Any], *, limit: int = 6) -> list[str]:
 
 
 def _iter_review_issues(state: StateModel) -> list[dict[str, Any]]:
-    issues = state.get("issues")
+    issues = state.get("work_items")
     if not isinstance(issues, dict):
         return []
     out: list[dict[str, Any]] = []

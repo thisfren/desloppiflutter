@@ -8,6 +8,12 @@ from typing import Any
 
 from desloppify.base.enums import issue_status_tokens
 from desloppify.base.registry import DETECTORS
+from desloppify.engine._plan.cluster_semantics import ACTION_TYPE_AUTO_FIX
+from desloppify.engine._plan.constants import is_triage_id
+from desloppify.engine._state.issue_semantics import (
+    is_review_finding,
+    is_assessment_request,
+)
 from desloppify.engine._state.schema import StateModel
 from desloppify.engine._work_queue.types import WorkQueueItem
 
@@ -30,12 +36,11 @@ def status_matches(item_status: str, status_filter: str) -> bool:
 
 
 def is_subjective_issue(item: WorkQueueItem | dict[str, Any]) -> bool:
-    detector = item.get("detector")
-    return detector in {"subjective_assessment", "holistic_review", "subjective_review"}
+    return is_assessment_request(item)
 
 
 def is_review_issue(item: WorkQueueItem | dict[str, Any]) -> bool:
-    return item.get("detector") == "review"
+    return is_review_finding(item)
 
 
 def is_subjective_queue_item(item: WorkQueueItem | dict[str, Any]) -> bool:
@@ -48,6 +53,15 @@ def is_subjective_queue_item(item: WorkQueueItem | dict[str, Any]) -> bool:
             m.get("kind") == "subjective_dimension" for m in members
         )
     return False
+
+
+def is_auto_fix_item(item: WorkQueueItem | dict[str, Any]) -> bool:
+    """Return True when a queue item semantically represents auto-fix work."""
+    action_type = str(item.get("action_type") or "").strip()
+    if action_type:
+        return action_type == ACTION_TYPE_AUTO_FIX
+    command = str(item.get("primary_command") or "").strip()
+    return command.startswith("desloppify autofix ") and "--dry-run" in command
 
 
 def review_issue_weight(item: WorkQueueItem | dict[str, Any]) -> float:
@@ -115,7 +129,7 @@ def workflow_stage_name(item: WorkQueueItem | dict[str, Any]) -> str:
         return stage_name
 
     item_id = str(item.get("id", "")).strip()
-    if item_id.startswith("triage::"):
+    if is_triage_id(item_id):
         return item_id.split("::", 1)[1]
     return ""
 
@@ -158,7 +172,7 @@ def primary_command_for_issue(
         ]
         if available_fixers:
             return f"desloppify autofix {available_fixers[0]} --dry-run"
-    if detector == "subjective_review":
+    if is_assessment_request(item):
         dim_key = (item.get("detail") or {}).get("dimension", "")
         if dim_key:
             return f"desloppify review --prepare --dimensions {dim_key}"
@@ -170,6 +184,7 @@ __all__ = [
     "ALL_STATUSES",
     "ATTEST_EXAMPLE",
     "detail_dict",
+    "is_auto_fix_item",
     "is_review_issue",
     "is_subjective_issue",
     "is_subjective_queue_item",

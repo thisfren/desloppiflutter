@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._clusters_complexity import (
+from desloppify.intelligence.review.context_holistic.clusters.complexity import (
     _build_complexity_hotspots,
 )
 
@@ -62,4 +62,3 @@ def test_build_complexity_hotspots_limits_to_top_twenty() -> None:
     assert len(hotspots) == 20
     assert hotspots[0]["file"] == "src/f29.py"
     assert hotspots[-1]["file"] == "src/f10.py"
-

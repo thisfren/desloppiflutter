@@ -6,7 +6,6 @@ import copy
 from pathlib import Path
 from types import SimpleNamespace
 
-from desloppify import state as state_mod
 from desloppify.app.commands.scan.reporting import (
     dimensions as reporting_dimensions_mod,
 )
@@ -23,11 +22,14 @@ from desloppify.engine._plan.sync.workflow_gates import (
     import_scores_meta_matches,
     pending_import_scores_meta,
 )
+from desloppify.engine._state.persistence import load_state, save_state
+from desloppify.engine._state.schema import utc_now
 from desloppify.intelligence import integrity as subjective_integrity_mod
 from desloppify.intelligence.review.importing.holistic import import_holistic_issues
 from desloppify.intelligence.review.importing.contracts_models import (
     AssessmentImportPolicyModel,
 )
+from desloppify.state_score_snapshot import score_snapshot
 
 from ..assessment_integrity import (
     bind_scorecard_subjective_at_target,
@@ -45,10 +47,11 @@ from .output import (
     print_assessment_policy_notice,
     print_import_load_errors,
 )
+from ..state_payloads import append_assessment_import_audit
 from .policy import assessment_policy_model_from_payload
-from .helpers import load_import_issues_data
 from .parse import (
     ImportPayloadLoadError,
+    load_import_issues_data,
     resolve_override_context,
 )
 from .plan_sync import PlanImportSyncRequest, sync_plan_after_import
@@ -96,7 +99,7 @@ def _build_working_state(state: dict, state_file) -> dict:
     """Return state snapshot used for import mutation/dry-run rendering."""
     state_path = Path(state_file) if state_file is not None else None
     if state_path is not None and state_path.exists():
-        return copy.deepcopy(state_mod.load_state(state_path))
+        return copy.deepcopy(load_state(state_path))
     return copy.deepcopy(state)
 
 
@@ -145,14 +148,17 @@ def _append_assessment_import_audit(
     provisional_count: int,
     override_attest: str | None,
     import_file,
+    import_payload: dict,
 ) -> None:
     """Record audit metadata for assessment-bearing import payloads."""
     if not assessment_policy.assessments_present:
         return
-    audit = working_state.setdefault("assessment_import_audit", [])
-    audit.append(
+    provenance = import_payload.get("provenance")
+    provenance_dict = provenance if isinstance(provenance, dict) else {}
+    append_assessment_import_audit(
+        working_state,
         {
-            "timestamp": state_mod.utc_now(),
+            "timestamp": utc_now(),
             "mode": assessment_policy.mode,
             "trusted": bool(assessment_policy.trusted),
             "reason": assessment_policy.reason,
@@ -162,6 +168,7 @@ def _append_assessment_import_audit(
             "provisional_count": int(provisional_count),
             "attest": (override_attest or "").strip(),
             "import_file": str(import_file),
+            "packet_sha256": str(provenance_dict.get("packet_sha256", "")).strip(),
         }
     )
 
@@ -180,7 +187,7 @@ def _persist_import_state(
     """Persist imported state and synchronize the work plan."""
     state.clear()
     state.update(working_state)
-    state_mod.save_state(state, state_file)
+    save_state(state, state_file)
     sync_plan_after_import(
         state,
         diff,
@@ -316,7 +323,7 @@ def do_import(
         assessment_policy=assessment_policy,
     )
 
-    prev = state_mod.score_snapshot(state)
+    prev = score_snapshot(state)
     working_state = _build_working_state(state, state_file)
 
     diff = import_holistic_issues(issues_data, working_state, lang.name)
@@ -333,6 +340,7 @@ def do_import(
         provisional_count=provisional_count,
         override_attest=override_attest,
         import_file=import_file,
+        import_payload=issues_data,
     )
 
     if not dry_run:
@@ -382,7 +390,7 @@ def do_validate_import(
     try:
         issues_data = load_import_issues_data(
             import_file,
-            config=build_import_load_config(
+            options=build_import_load_config(
                 lang_name=lang.name,
                 import_config=resolved_import_config,
                 override_enabled=override_enabled,

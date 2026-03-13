@@ -144,7 +144,7 @@ def _check_queue_order_guard(
         return False
 
     clusters = plan.get("clusters", {})
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     resolved_ids = _resolve_target_ids(patterns, clusters)
     resolved_ids = _filter_open_or_cluster_targets(
         resolved_ids,

@@ -6,6 +6,9 @@ Internal layout:
 - ``specs``: language-spec catalogs and variants
 - ``imports``: import graph + resolver/cache helpers
 - ``analysis``: detectors/extractors/complexity helpers
+
+Underscore-prefixed modules at this package root remain compatibility shims only.
+New code and direct tests should import from the grouped namespaces above.
 """
 
 from __future__ import annotations

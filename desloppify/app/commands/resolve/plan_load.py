@@ -34,6 +34,7 @@ class ResolvePlanAccess:
     degraded: bool
     error_kind: str | None
     warning_state: DegradedPlanWarningState
+    recovery: str | None = None
 
     def usable_plan(self, *, behavior: str, command_label: str = "resolve") -> dict | None:
         """Return the loaded plan, warning once when resolve falls back."""
@@ -44,6 +45,8 @@ class ResolvePlanAccess:
                 behavior=behavior,
                 warning_state=self.warning_state,
             )
+            if self.recovery == "backup":
+                return self.plan if isinstance(self.plan, dict) else None
             return None
         return self.plan if isinstance(self.plan, dict) else None
 
@@ -59,6 +62,7 @@ def load_resolve_plan_access(
         plan=status.plan,
         degraded=status.degraded,
         error_kind=status.error_kind,
+        recovery=getattr(status, "recovery", None),
         warning_state=resolved_warning_state,
     )
 

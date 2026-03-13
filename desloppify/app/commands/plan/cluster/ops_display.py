@@ -9,7 +9,7 @@ from desloppify.app.commands.plan.shared.cluster_membership import cluster_issue
 from desloppify.base.output.terminal import colorize
 from desloppify.engine.plan_state import load_plan
 
-from .cluster_steps import print_step
+from .steps import print_step
 
 
 def _print_cluster_member(idx: int, fid: str, issue: dict | None) -> None:
@@ -33,7 +33,7 @@ def _print_cluster_member(idx: int, fid: str, issue: dict | None) -> None:
 def _load_issues_best_effort(args: argparse.Namespace) -> dict:
     """Load issues from state, returning empty dict on failure."""
     rt = command_runtime(args)
-    return rt.state.get("issues", {})
+    return rt.state.get("work_items") or rt.state.get("issues", {})
 
 
 def _load_cluster_or_print_missing(cluster_name: str) -> dict | None:

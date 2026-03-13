@@ -19,7 +19,6 @@ class SubjectiveAssessmentJudgment(TypedDict, total=False):
     """Reviewer's holistic judgment narrative for a subjective dimension."""
 
     strengths: list[str]
-    issue_character: str
     dimension_character: str
     score_rationale: str
 
@@ -68,6 +67,7 @@ class AssessmentImportAuditEntry(TypedDict, total=False):
     provisional_count: int
     attest: str
     import_file: str
+    packet_sha256: str
 
 
 class AttestationLogEntry(TypedDict, total=False):

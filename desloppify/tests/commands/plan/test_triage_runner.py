@@ -32,8 +32,8 @@ def _make_triage_input(n_issues: int = 5) -> TriageInput:
             "detail": {"dimension": f"dim_{i % 3}", "suggestion": "Fix it"},
         }
     return TriageInput(
-        open_issues=issues,
-        mechanical_issues={},
+        review_issues=issues,
+        objective_backlog_issues={},
         existing_clusters={},
         dimension_scores={"dim_0": {"score": 70, "strict": 65, "failing": 2}},
         new_since_last=set(),
@@ -391,6 +391,101 @@ def test_validate_enrich_vague_detail(tmp_path: Path) -> None:
     assert "vague" in msg
 
 
+def test_validate_enrich_ignores_out_of_scope_clusters_for_frozen_triage(tmp_path: Path) -> None:
+    """Runner enrich validation should only inspect clusters tied to the active triage session."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "current.ts").write_text("export {}")
+    plan = _plan_with_stages(enrich={"report": "x" * 150})
+    plan["epic_triage_meta"]["active_triage_issue_ids"] = ["review::current::issue"]
+    plan["clusters"] = {
+        "current": {
+            "issue_ids": ["review::current::issue"],
+            "description": "current batch",
+            "action_steps": [
+                {
+                    "title": "fix current",
+                    "detail": "Update src/current.ts to simplify the active path and remove duplication. " + "x" * 30,
+                    "effort": "small",
+                    "issue_refs": ["review::current::issue"],
+                }
+            ],
+        },
+        "legacy": {
+            "issue_ids": ["review::legacy::issue"],
+            "description": "old batch",
+            "action_steps": [
+                {
+                    "title": "old vague step",
+                    "detail": "",
+                    "effort": "small",
+                }
+            ],
+        },
+    }
+    state = {
+        "issues": {
+            "review::current::issue": {"status": "open", "detector": "review"},
+            "review::legacy::issue": {"status": "open", "detector": "review"},
+        }
+    }
+    ok, msg = validate_stage("enrich", plan, state, tmp_path)
+    assert ok, msg
+
+
+def test_validate_sense_check_ignores_out_of_scope_clusters_for_frozen_triage(tmp_path: Path) -> None:
+    """Decision-ledger coverage should only include live targets from the active triage session."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "current.ts").write_text("export {}")
+    plan = _plan_with_stages(
+        **{
+            "sense-check": {
+                "report": "\n".join(
+                    [
+                        "Verified src/current.ts lines 1-10: the active cluster is concrete, safe, and removes duplication without adding indirection. " + "x" * 20,
+                        "## Decision Ledger",
+                        "- current -> keep",
+                    ]
+                )
+            }
+        }
+    )
+    plan["epic_triage_meta"]["active_triage_issue_ids"] = ["review::current::issue"]
+    plan["clusters"] = {
+        "current": {
+            "issue_ids": ["review::current::issue"],
+            "description": "current batch",
+            "action_steps": [
+                {
+                    "title": "fix current",
+                    "detail": "Update src/current.ts to simplify the active path and remove duplication. " + "x" * 30,
+                    "effort": "small",
+                    "issue_refs": ["review::current::issue"],
+                }
+            ],
+        },
+        "legacy": {
+            "issue_ids": ["review::legacy::issue"],
+            "description": "old batch",
+            "action_steps": [
+                {
+                    "title": "old valid step",
+                    "detail": "Update src/legacy.ts to simplify the old path and remove duplication. " + "x" * 30,
+                    "effort": "small",
+                    "issue_refs": ["review::legacy::issue"],
+                }
+            ],
+        },
+    }
+    state = {
+        "issues": {
+            "review::current::issue": {"status": "open", "detector": "review"},
+            "review::legacy::issue": {"status": "open", "detector": "review"},
+        }
+    }
+    ok, msg = validate_stage("sense-check", plan, state, tmp_path)
+    assert ok, msg
+
+
 # ---------- Underspecified steps (AND→OR fix) ----------
 
 
@@ -553,6 +648,7 @@ def test_validate_completion_self_dependency(tmp_path: Path) -> None:
         organize={"report": "x" * 150, "confirmed_at": "t"},
         enrich={"report": "x" * 150, "confirmed_at": "t"},
         **{"sense-check": {"report": "x" * 150, "confirmed_at": "t"}},
+        **{"value-check": {"report": "x" * 150, "confirmed_at": "t"}},
     )
     plan["clusters"] = {
         "self-dep": {
@@ -574,6 +670,7 @@ def test_validate_completion_surfaces_all_trivial_cluster_advisory(tmp_path: Pat
         organize={"report": "x" * 150, "confirmed_at": "t"},
         enrich={"report": "x" * 150, "confirmed_at": "t"},
         **{"sense-check": {"report": "x" * 150, "confirmed_at": "t"}},
+        **{"value-check": {"report": "x" * 150, "confirmed_at": "t"}},
     )
     plan["clusters"] = {
         "all-trivial": {
@@ -606,10 +703,58 @@ def test_validate_completion_allows_zero_issue_noop(tmp_path: Path) -> None:
         organize={"report": "x" * 150, "confirmed_at": "t"},
         enrich={"report": "x" * 150, "confirmed_at": "t"},
         **{"sense-check": {"report": "x" * 150, "confirmed_at": "t"}},
+        **{"value-check": {"report": "x" * 150, "confirmed_at": "t"}},
     )
     ok, msg = validate_completion(plan, {"issues": {}}, tmp_path)
     assert ok
     assert msg == ""
+
+
+def test_validate_completion_ignores_out_of_scope_clusters_for_frozen_triage(tmp_path: Path) -> None:
+    """Completion should only validate clusters tied to the frozen triage issue set."""
+    plan = _plan_with_stages(
+        observe={"report": "x" * 150, "confirmed_at": "t"},
+        reflect={"report": "x" * 150, "confirmed_at": "t"},
+        organize={"report": "x" * 150, "confirmed_at": "t"},
+        enrich={"report": "x" * 150, "confirmed_at": "t"},
+        **{"sense-check": {"report": "x" * 150, "confirmed_at": "t"}},
+        **{"value-check": {"report": "x" * 150, "confirmed_at": "t"}},
+    )
+    plan["epic_triage_meta"]["active_triage_issue_ids"] = ["review::current::issue"]
+    plan["clusters"] = {
+        "current": {
+            "issue_ids": ["review::current::issue"],
+            "description": "current batch",
+            "action_steps": [
+                {
+                    "title": "fix current",
+                    "detail": "Update src/current.ts to simplify the active path and remove duplication. " + "x" * 30,
+                    "effort": "small",
+                    "issue_refs": ["review::current::issue"],
+                }
+            ],
+        },
+        "legacy-self-dep": {
+            "issue_ids": ["review::legacy::issue"],
+            "description": "old batch",
+            "action_steps": [
+                {
+                    "title": "old step",
+                    "detail": "",
+                    "effort": "small",
+                }
+            ],
+            "depends_on_clusters": ["legacy-self-dep"],
+        },
+    }
+    state = {
+        "issues": {
+            "review::current::issue": {"status": "open", "detector": "review"},
+            "review::legacy::issue": {"status": "open", "detector": "review"},
+        }
+    }
+    ok, msg = validate_completion(plan, state, tmp_path)
+    assert ok, msg
 
 
 def test_validate_stage_organize_allows_zero_issue_noop(tmp_path: Path) -> None:
@@ -662,6 +807,8 @@ def test_sense_check_prompt_includes_cluster_data(tmp_path: Path) -> None:
     assert str(tmp_path) in prompt
     assert "LINE NUMBERS" in prompt
     assert "STALENESS" in prompt
+    assert "ONLY reference file paths that already exist on disk" in prompt
+    assert "do NOT invent a future filename" in prompt
 
 
 def test_sense_check_structure_prompt_includes_clusters(tmp_path: Path) -> None:
@@ -691,6 +838,7 @@ def test_sense_check_structure_prompt_includes_clusters(tmp_path: Path) -> None:
     assert "depends_on: cluster-a" in prompt
     assert "SHARED FILES" in prompt
     assert "CIRCULAR DEPS" in prompt
+    assert "Do NOT add cascade steps that point at speculative future files" in prompt
 
 
 # ---------- Sense-check validation ----------
@@ -722,7 +870,18 @@ def test_sense_check_validation_ok(tmp_path: Path) -> None:
     """Sense-check passes when report is long enough and all enrich checks pass."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "foo.ts").write_text("export {}")
-    plan = _plan_with_stages(**{"sense-check": {"report": "Verified test-cluster steps: src/foo.ts lines 10-20 match description. Effort tags accurate. " + "x" * 60}})
+    plan = _plan_with_stages(
+        **{
+            "sense-check": {
+                "report": (
+                    "## Decision Ledger\n"
+                    "- test-cluster -> keep\n\n"
+                    "Verified test-cluster steps: src/foo.ts lines 10-20 match description. "
+                    "Effort tags accurate. " + "x" * 60
+                )
+            }
+        }
+    )
     plan["clusters"] = {
         "test-cluster": {
             "issue_ids": ["review::a::b"],
@@ -739,6 +898,47 @@ def test_sense_check_validation_ok(tmp_path: Path) -> None:
     }
     ok, msg = validate_stage("sense-check", plan, {}, tmp_path)
     assert ok
+
+
+def test_sense_check_validation_uses_frozen_value_targets(tmp_path: Path) -> None:
+    """Validation should accept decision-ledger targets captured before value-pass pruning."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "foo.ts").write_text("export {}")
+    plan = _plan_with_stages(
+        **{
+            "sense-check": {
+                "report": (
+                    "## Decision Ledger\n"
+                    "- kept-cluster -> keep\n"
+                    "- pruned-cluster -> skip\n"
+                    "- review::.::holistic::cross_module_architecture::private_framework_boundary_still_leaks -> skip\n\n"
+                    "Verified kept-cluster in src/foo.ts lines 1-10 and recorded why the pruned targets were removed during the value pass. "
+                    + "x" * 80
+                ),
+                "value_targets": [
+                    "kept-cluster",
+                    "pruned-cluster",
+                    "review::.::holistic::cross_module_architecture::private_framework_boundary_still_leaks",
+                ],
+            }
+        }
+    )
+    plan["clusters"] = {
+        "kept-cluster": {
+            "issue_ids": ["review::a::b"],
+            "description": "active",
+            "action_steps": [
+                {
+                    "title": "fix",
+                    "detail": "Update src/foo.ts to simplify the active path and remove duplication. " + "x" * 40,
+                    "effort": "small",
+                    "issue_refs": ["review::a::b"],
+                }
+            ],
+        }
+    }
+    ok, msg = validate_stage("sense-check", plan, {}, tmp_path)
+    assert ok, msg
 
 
 def test_sense_check_stage_in_pipeline_order() -> None:

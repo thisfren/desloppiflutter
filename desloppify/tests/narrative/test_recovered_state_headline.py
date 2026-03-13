@@ -9,7 +9,7 @@ from desloppify.state_io import empty_state
 def test_compute_narrative_does_not_claim_first_scan_for_reconstructed_state() -> None:
     state = empty_state()
     state["stats"] = {"open": 2}
-    state["issues"] = {
+    state["work_items"] = {
         "review::src/foo.ts::abcd1234": {
             "id": "review::src/foo.ts::abcd1234",
             "status": "open",

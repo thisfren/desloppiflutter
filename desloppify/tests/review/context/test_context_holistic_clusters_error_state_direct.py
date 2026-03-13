@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._clusters_error_state import (
+from desloppify.intelligence.review.context_holistic.clusters.error_state import (
     _build_error_hotspots,
     _build_mutable_globals,
 )

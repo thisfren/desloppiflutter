@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -62,11 +63,13 @@ class TestQueueContextPlanResolution:
         """Default sentinel triggers load_plan()."""
         fake_plan = {"queue_order": ["f1"]}
         with patch(
-            "desloppify.engine._work_queue.context.has_living_plan",
-            return_value=True,
-        ), patch(
-            "desloppify.engine._work_queue.context.load_plan",
-            return_value=fake_plan,
+            "desloppify.engine._work_queue.context.resolve_persisted_plan_load_status",
+            return_value=SimpleNamespace(
+                plan=fake_plan,
+                degraded=False,
+                error_kind=None,
+                recovery=None,
+            ),
         ):
             ctx = queue_context(_minimal_state())
         assert ctx.plan is fake_plan
@@ -76,11 +79,13 @@ class TestQueueContextPlanResolution:
     def test_auto_load_plan_handles_failure(self):
         """When load_plan() raises, plan is None."""
         with patch(
-            "desloppify.engine._work_queue.context.has_living_plan",
-            return_value=True,
-        ), patch(
-            "desloppify.engine._work_queue.context.load_plan",
-            side_effect=OSError("no plan file"),
+            "desloppify.engine._work_queue.context.resolve_persisted_plan_load_status",
+            return_value=SimpleNamespace(
+                plan=None,
+                degraded=True,
+                error_kind="OSError",
+                recovery="fresh_start",
+            ),
         ):
             ctx = queue_context(_minimal_state())
         assert ctx.plan is None
@@ -90,8 +95,13 @@ class TestQueueContextPlanResolution:
     def test_auto_load_without_plan_file_not_degraded(self):
         """Missing living plan is not treated as degraded mode."""
         with patch(
-            "desloppify.engine._work_queue.context.has_living_plan",
-            return_value=False,
+            "desloppify.engine._work_queue.context.resolve_persisted_plan_load_status",
+            return_value=SimpleNamespace(
+                plan=None,
+                degraded=False,
+                error_kind=None,
+                recovery=None,
+            ),
         ):
             ctx = queue_context(_minimal_state())
         assert ctx.plan is None

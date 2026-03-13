@@ -256,7 +256,7 @@ def test_normalize_batch_result_rejects_low_score_without_same_dimension_issue()
                 "dimension_judgment": {
                     "logic_clarity": {
                         "strengths": ["handlers keep domain names consistent"],
-                        "issue_character": "Predicate logic drifts between equivalent paths.",
+                        "dimension_character": "Predicate logic drifts between equivalent paths.",
                         "score_rationale": (
                             "The core decision paths are understandable, but equivalent handlers "
                             "encode different branching logic and create behavioral drift. "
@@ -289,7 +289,7 @@ def test_normalize_batch_result_accepts_low_score_with_same_dimension_issue():
             "dimension_judgment": {
                 "logic_clarity": {
                     "strengths": ["predicate naming is mostly descriptive"],
-                    "issue_character": "Control-flow choices are easy to follow but inconsistent.",
+                    "dimension_character": "Control-flow choices are easy to follow but inconsistent.",
                     "score_rationale": (
                         "Branch structure is readable in isolation, yet equivalent handlers "
                         "use incompatible predicate logic that undermines coherence. "
@@ -335,7 +335,7 @@ def test_normalize_batch_result_accepts_dismissed_concern_entries() -> None:
             "dimension_judgment": {
                 "logic_clarity": {
                     "strengths": ["the reviewer checked the signal and explained the outcome"],
-                    "issue_character": "Most concerns are real, but some detector signals are intentionally acceptable seams.",
+                    "dimension_character": "Most concerns are real, but some detector signals are intentionally acceptable seams.",
                     "score_rationale": (
                         "The code remains understandable, and the review includes explicit adjudication "
                         "of detector concerns instead of silently dropping them. That keeps the score "
@@ -389,7 +389,7 @@ def test_normalize_batch_result_accepts_legacy_findings_alias():
             "dimension_judgment": {
                 "logic_clarity": {
                     "strengths": ["legacy payload shape is still parseable"],
-                    "issue_character": "The contract is clear but legacy paths increase ambiguity.",
+                    "dimension_character": "The contract is clear but legacy paths increase ambiguity.",
                     "score_rationale": (
                         "The importer retains strong structural expectations, but alias handling "
                         "adds historical complexity that can obscure canonical usage. "
@@ -472,7 +472,7 @@ def test_normalize_batch_result_rejects_incomplete_dimension_judgment_entry():
                 "dimension_judgment": {
                     "logic_clarity": {
                         "strengths": ["handler structure is predictable"],
-                        "issue_character": "some divergence exists",
+                        "dimension_character": "some divergence exists",
                     }
                 },
                 "issues": [
@@ -512,7 +512,7 @@ def test_normalize_batch_result_accepts_legacy_unreported_risk_key():
             "dimension_judgment": {
                 "logic_clarity": {
                     "strengths": ["legacy and canonical fields are reconciled"],
-                    "issue_character": "Compatibility handling is explicit but adds branching cost.",
+                    "dimension_character": "Compatibility handling is explicit but adds branching cost.",
                     "score_rationale": (
                         "Normalization logic remains understandable because compatibility keys are "
                         "handled in one place, but each legacy path increases cognitive load. "
@@ -558,7 +558,7 @@ def test_normalize_batch_result_normalizes_context_updates() -> None:
             "dimension_judgment": {
                 "logic_clarity": {
                     "strengths": ["keeps valid updates"],
-                    "issue_character": "context updates are accepted when structured",
+                    "dimension_character": "context updates are accepted when structured",
                     "score_rationale": (
                         "The payload should preserve valid additions and header-based mutations "
                         "while dropping malformed entries."

@@ -15,7 +15,7 @@ from desloppify.engine.plan_state import (
     render_policy_block,
 )
 
-from ..review_coverage import manual_clusters_with_issues
+from ..stages.helpers import scoped_manual_clusters_with_issues, triage_scoped_plan
 from .codex_runner import (
     TriageStageRunResult,
     _output_file_has_text,
@@ -26,6 +26,7 @@ from .stage_prompts import (
     build_sense_check_content_prompt,
     build_sense_check_structure_prompt,
 )
+from .stage_prompts_sense import build_sense_check_value_prompt
 
 
 def _noop_log(_msg: str) -> None:
@@ -45,13 +46,13 @@ def _print_sense_header(total_content: int, *, apply_updates: bool, log: Callabl
     if apply_updates:
         print(
             colorize(
-                f"\n  Sense-check: {total_content} content batches, then 1 structure batch.",
+                f"\n  Sense-check: {total_content} content batches, then 1 structure batch, then 1 value batch.",
                 "bold",
             )
         )
         log(f"sense-check-sequenced content_batches={total_content} apply_updates=1")
         return
-    print(colorize(f"\n  Sense-check: {total_content} content batches + 1 structure batch.", "bold"))
+    print(colorize(f"\n  Sense-check: {total_content} content batches + 1 structure batch + 1 value batch.", "bold"))
     log(f"sense-check-parallel content_batches={total_content}")
 
 
@@ -246,6 +247,33 @@ def _merge_batch_outputs(batch_meta: list[tuple[str, Path]]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _value_batch_config(
+    *,
+    plan: dict,
+    state: dict | None,
+    repo_root: Path,
+    prompts_dir: Path,
+    output_dir: Path,
+    logs_dir: Path,
+    mode: str,
+    cli_command: str,
+) -> SenseBatchConfig:
+    prompt = build_sense_check_value_prompt(
+        plan=dict(plan),
+        state=state,
+        repo_root=repo_root,
+        mode=mode,
+        cli_command=cli_command,
+    )
+    return SenseBatchConfig(
+        label="value",
+        prompt_file=prompts_dir / "sense_check_value.md",
+        output_file=output_dir / "sense_check_value.raw.txt",
+        log_file=logs_dir / "sense_check_value.log",
+        prompt=prompt,
+    )
+
+
 def run_sense_check(
     *,
     plan: dict,
@@ -259,13 +287,15 @@ def run_sense_check(
     apply_updates: bool = False,
     reload_plan: Callable[[], dict] | None = None,
     append_run_log=None,
+    state: dict | None = None,
 ) -> TriageStageRunResult:
-    """Run sense-check via parallel codex subprocess batches."""
+    """Run sense-check via parallel codex subprocess batches (content → structure → value)."""
     _log = append_run_log or _noop_log
 
-    clusters = manual_clusters_with_issues(plan)
+    scoped_plan = triage_scoped_plan(plan, state)
+    clusters = scoped_manual_clusters_with_issues(plan, state)
     total_content = len(clusters)
-    total = total_content + 1
+    total = total_content + 2  # +1 structure +1 value
     _print_sense_header(total_content, apply_updates=apply_updates, log=_log)
 
     policy_result = load_policy_result()
@@ -280,7 +310,7 @@ def run_sense_check(
     content_mode, structure_mode = _sense_modes(apply_updates=apply_updates)
     content_tasks, batch_meta = _content_tasks_and_meta(
         clusters=clusters,
-        plan=plan,
+        plan=scoped_plan,
         repo_root=repo_root,
         prompts_dir=prompts_dir,
         output_dir=output_dir,
@@ -292,7 +322,7 @@ def run_sense_check(
         cli_command=cli_command,
         log=_log,
     )
-    structure_plan = dict(plan)
+    structure_plan = dict(scoped_plan)
     structure_config = _structure_batch_config(
         plan=structure_plan,
         repo_root=repo_root,
@@ -354,6 +384,51 @@ def run_sense_check(
     )
     if structure_failures:
         return _parallel_failure_result(structure_failures, log=_log)
+
+    # Value batch — runs after structure (needs corrected plan state)
+    value_plan = dict(plan)
+    if apply_updates and reload_plan is not None:
+        reloaded = _reload_structure_plan(reload_plan=reload_plan, log=_log)
+        if reloaded is not None:
+            value_plan = reloaded
+            _log("sense-check-plan-reloaded phase=value")
+
+    value_mode = "self_record" if apply_updates else "output_only"
+    value_config = _value_batch_config(
+        plan=value_plan,
+        state=state,
+        repo_root=repo_root,
+        prompts_dir=prompts_dir,
+        output_dir=output_dir,
+        logs_dir=logs_dir,
+        mode=value_mode,
+        cli_command=cli_command,
+    )
+    _write_batch_prompt(value_config)
+    batch_meta.append((value_config.label, value_config.output_file))
+    print(colorize("    Value batch: YAGNI/KISS pass", "dim"))
+    _log("sense-check-value batch=global")
+
+    if not dry_run:
+        value_tasks: dict[int, Callable[[], TriageStageRunResult]] = {
+            0: partial(
+                run_triage_stage,
+                prompt=value_config.prompt,
+                repo_root=repo_root,
+                output_file=value_config.output_file,
+                log_file=value_config.log_file,
+                timeout_seconds=timeout_seconds,
+                validate_output_fn=_output_file_has_text,
+            )
+        }
+        value_failures = _run_parallel_or_fail(
+            tasks=value_tasks,
+            stage_label="Sense-check",
+            batch_label_fn=lambda _idx: "value",
+            log=_log,
+        )
+        if value_failures:
+            return _parallel_failure_result(value_failures, log=_log)
 
     merged = _merge_batch_outputs(batch_meta)
     print(colorize(f"  Sense-check: merged {total} batch outputs ({len(merged)} chars).", "green"))

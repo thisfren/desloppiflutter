@@ -321,8 +321,8 @@ def show_structural_areas(state: StateModel) -> None:
 
 
 def show_review_summary(state: StateModel) -> None:
-    """Show review issues summary if any exist."""
-    issues = state.get("issues", {})
+    """Show review work items summary if any exist."""
+    issues = (state.get("work_items") or state.get("issues", {}))
     review_open = [
         f
         for f in issues.values()
@@ -341,7 +341,7 @@ def show_review_summary(state: StateModel) -> None:
     if "Test health" in dim_scores:
         print(
             colorize(
-                "  Test health tracks coverage + review; review issues track issues found.",
+                "  Test health tracks coverage + review; review work items track issues found.",
                 "dim",
             )
         )

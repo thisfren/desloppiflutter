@@ -8,6 +8,11 @@ from typing import Any, cast
 
 from desloppify.base.discovery.paths import get_project_root
 from desloppify.base.enums import Status, canonical_issue_status, issue_status_tokens
+from desloppify.engine._state.issue_semantics import (
+    ensure_work_item_semantics,
+    WORK_ITEM_KINDS,
+    WORK_ITEM_ORIGINS,
+)
 from desloppify.engine._state.schema_scores import (
     json_default,
 )
@@ -18,6 +23,7 @@ from desloppify.engine._state.schema_types import (
     DimensionScore,
     IgnoreIntegrityModel,
     Issue,
+    WorkItem,
     LangCapability,
     ReviewCacheModel,
     ScanMetadataModel,
@@ -38,6 +44,7 @@ __all__ = [
     "AssessmentImportAuditEntry",
     "AttestationLogEntry",
     "Issue",
+    "WorkItem",
     "TierStats",
     "StateStats",
     "DimensionScore",
@@ -85,7 +92,7 @@ def get_state_file() -> Path:
     return get_state_dir() / "state.json"
 
 
-CURRENT_VERSION = 1
+CURRENT_VERSION = 3
 
 
 def utc_now() -> str:
@@ -95,6 +102,7 @@ def utc_now() -> str:
 
 def empty_state() -> StateModel:
     """Return a new empty state payload."""
+    work_items: dict[str, WorkItem] = {}
     return {
         "version": CURRENT_VERSION,
         "created": utc_now(),
@@ -105,7 +113,8 @@ def empty_state() -> StateModel:
         "strict_score": 0,
         "verified_strict_score": 0,
         "stats": {},
-        "issues": {},
+        "work_items": work_items,
+        "issues": work_items,
         "scan_coverage": {},
         "score_confidence": {},
         "scan_metadata": {"source": "empty"},
@@ -132,11 +141,13 @@ def _rename_key(d: dict, old: str, new: str) -> bool:
 def migrate_state_keys(state: StateModel | dict[str, Any]) -> None:
     """Migrate legacy key names in-place.
 
-    - ``"findings"`` → ``"issues"``
+    - ``"findings"`` → ``"work_items"``
+    - legacy ``"issues"`` → ``"work_items"``
     - ``dimension_scores[dim]["issues"]`` → ``"failing"``
     """
     state_dict = cast(dict[str, Any], state)
-    _rename_key(state_dict, "findings", "issues")
+    _rename_key(state_dict, "findings", "work_items")
+    _rename_key(state_dict, "issues", "work_items")
 
     for ds in state_dict.get("dimension_scores", {}).values():
         if isinstance(ds, dict):
@@ -159,9 +170,12 @@ def _normalize_scan_metadata(state: StateModel | dict[str, Any]) -> None:
     normalized: ScanMetadataModel = {"source": source}
     if source == "plan_reconstruction":
         normalized["plan_queue_available"] = bool(metadata.get("plan_queue_available"))
-        issue_count = metadata.get("reconstructed_issue_count", 0)
-        if isinstance(issue_count, int) and not isinstance(issue_count, bool):
-            normalized["reconstructed_issue_count"] = max(0, issue_count)
+        work_item_count = metadata.get(
+            "reconstructed_work_item_count",
+            metadata.get("reconstructed_issue_count", 0),
+        )
+        if isinstance(work_item_count, int) and not isinstance(work_item_count, bool):
+            normalized["reconstructed_issue_count"] = max(0, work_item_count)
         else:
             normalized["reconstructed_issue_count"] = 0
 
@@ -175,9 +189,18 @@ def ensure_state_defaults(state: StateModel | dict) -> None:
     mutable_state = cast(dict[str, Any], state)
     for key, value in empty_state().items():
         mutable_state.setdefault(key, value)
+    version = mutable_state.get("version")
+    if not isinstance(version, int):
+        mutable_state["version"] = CURRENT_VERSION
+    elif version < CURRENT_VERSION:
+        mutable_state["version"] = CURRENT_VERSION
 
-    if not isinstance(state.get("issues"), dict):
-        state["issues"] = {}
+    if not isinstance(state.get("work_items"), dict):
+        legacy_items = state.get("issues")
+        state["work_items"] = legacy_items if isinstance(legacy_items, dict) else {}
+    # Keep the legacy alias available in-memory while internal call sites
+    # migrate, but make ``work_items`` the canonical storage.
+    state["issues"] = state["work_items"]
     if not isinstance(state.get("stats"), dict):
         state["stats"] = {}
     if not isinstance(state.get("scan_history"), list):
@@ -190,7 +213,7 @@ def ensure_state_defaults(state: StateModel | dict) -> None:
         state["subjective_integrity"] = {}
     _normalize_scan_metadata(state)
 
-    all_issues = state["issues"]
+    all_issues = state["work_items"]
     to_remove: list[str] = []
     for issue_id, issue in all_issues.items():
         if not isinstance(issue, dict):
@@ -199,6 +222,7 @@ def ensure_state_defaults(state: StateModel | dict) -> None:
 
         issue.setdefault("id", issue_id)
         issue.setdefault("detector", "unknown")
+        ensure_work_item_semantics(issue)
         issue.setdefault("file", "")
         issue.setdefault("tier", 3)
         issue.setdefault("confidence", "low")
@@ -236,8 +260,8 @@ def ensure_state_defaults(state: StateModel | dict) -> None:
 
 def validate_state_invariants(state: StateModel) -> None:
     """Raise ValueError when core state invariants are violated."""
-    if not isinstance(state.get("issues"), dict):
-        raise ValueError("state.issues must be a dict")
+    if not isinstance(state.get("work_items"), dict):
+        raise ValueError("state.work_items must be a dict")
     if not isinstance(state.get("stats"), dict):
         raise ValueError("state.stats must be a dict")
     metadata = state.get("scan_metadata")
@@ -253,12 +277,22 @@ def validate_state_invariants(state: StateModel) -> None:
                 "state.scan_metadata.reconstructed_issue_count must be a non-negative int"
             )
 
-    all_issues = state["issues"]
+    all_issues = state["work_items"]
     for issue_id, issue in all_issues.items():
         if not isinstance(issue, dict):
             raise ValueError(f"issue {issue_id!r} must be a dict")
         if issue.get("id") != issue_id:
             raise ValueError(f"issue id mismatch for {issue_id!r}")
+        issue_kind = issue.get("work_item_kind", issue.get("issue_kind"))
+        if issue_kind not in WORK_ITEM_KINDS:
+            raise ValueError(
+                f"issue {issue_id!r} has invalid work_item_kind {issue_kind!r}"
+            )
+        origin = issue.get("origin")
+        if origin not in WORK_ITEM_ORIGINS:
+            raise ValueError(
+                f"issue {issue_id!r} has invalid origin {origin!r}"
+            )
         if issue.get("status") not in _ALLOWED_ISSUE_STATUSES:
             raise ValueError(
                 f"issue {issue_id!r} has invalid status {issue.get('status')!r}"

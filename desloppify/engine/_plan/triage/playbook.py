@@ -9,7 +9,7 @@ TRIAGE_STAGE_LABELS: tuple[tuple[str, str], ...] = (
     ("reflect", "Form strategy & present to user"),
     ("organize", "Defer contradictions, cluster, & prioritize"),
     ("enrich", "Make steps executor-ready (detail, refs)"),
-    ("sense-check", "Verify accuracy & cross-cluster deps"),
+    ("sense-check", "Verify accuracy, structure & value"),
     ("commit", "Write strategy & confirm"),
 )
 

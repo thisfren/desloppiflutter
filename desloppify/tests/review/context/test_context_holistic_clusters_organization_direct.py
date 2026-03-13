@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from desloppify.intelligence.review.context_holistic._clusters_organization import (
+from desloppify.intelligence.review.context_holistic.clusters.organization import (
     _build_flat_dir_issues,
     _build_large_file_distribution,
 )

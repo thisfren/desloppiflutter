@@ -58,9 +58,9 @@ _check_queue_order_guard = _get_guard_fn()
 # ---------------------------------------------------------------------------
 
 def _state_with_issues(*ids: str) -> dict:
-    issues = {}
+    work_items = {}
     for fid in ids:
-        issues[fid] = {
+        work_items[fid] = {
             "id": fid,
             "status": "open",
             "detector": "unused",
@@ -69,7 +69,7 @@ def _state_with_issues(*ids: str) -> dict:
             "confidence": "high",
             "summary": f"Issue {fid}",
         }
-    return {"issues": issues, "scan_count": 5}
+    return {"work_items": work_items, "issues": work_items, "scan_count": 5}
 
 
 def _setup_plan(tmp_path, monkeypatch, queue_order: list[str], clusters: dict | None = None):
@@ -224,7 +224,7 @@ def test_guard_skips_resolved_ids_in_queue_order(tmp_path, monkeypatch):
     """Resolved (non-open) IDs at the front of queue_order should not block."""
     state = _state_with_issues("a", "b")
     # Mark "a" as fixed — it's still in state but no longer open
-    state["issues"]["a"]["status"] = "fixed"
+    state["work_items"]["a"]["status"] = "fixed"
     _setup_plan(tmp_path, monkeypatch, ["a", "b"])
 
     # "b" should be next since "a" is resolved

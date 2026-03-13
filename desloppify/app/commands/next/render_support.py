@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from desloppify.app.commands.helpers.queue_progress import format_plan_delta
 from desloppify.base.output.terminal import colorize
+from desloppify.engine._state.issue_semantics import is_review_finding
+from desloppify.engine._work_queue.helpers import is_auto_fix_item
 from desloppify.engine.work_queue import group_queue_items
 from desloppify.engine.planning.scorecard_projection import (
     scorecard_subjective_entries,
@@ -65,9 +67,9 @@ def is_auto_fix_command(command: str | None) -> bool:
 
 def effort_tag(item: dict) -> str:
     """Return a short effort/type tag for a queue item."""
-    if item.get("detector") == "review":
+    if is_review_finding(item):
         return "[review]"
-    if is_auto_fix_command(item.get("primary_command")):
+    if is_auto_fix_item(item):
         return "[auto]"
     return ""
 

@@ -1,5 +1,7 @@
 """God class/component detection via configurable rule-based analysis."""
 
+from __future__ import annotations
+
 
 def detect_gods(classes, rules, min_reasons: int = 2) -> tuple[list[dict], int]:
     """Find god classes/components — entities with too many responsibilities."""
@@ -23,3 +25,6 @@ def detect_gods(classes, rules, min_reasons: int = 2) -> tuple[list[dict], int]:
                 }
             )
     return sorted(entries, key=lambda e: -e["loc"]), len(classes)
+
+
+__all__ = ["detect_gods"]

@@ -205,7 +205,7 @@ def recompute_stats(
 ) -> None:
     """Recompute stats and canonical health scores from issues."""
     ensure_state_defaults(state)
-    issues = path_scoped_issues(state["issues"], scan_path)
+    issues = path_scoped_issues(state.get("work_items") or state.get("issues", {}), scan_path)
     counters, tier_stats = _count_issues(issues)
     state["stats"] = {
         "total": sum(counters.values()),

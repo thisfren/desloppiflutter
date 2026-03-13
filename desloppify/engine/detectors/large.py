@@ -1,5 +1,7 @@
 """Large file detection (LOC threshold)."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -29,3 +31,6 @@ def detect_large_files(
             )
             continue
     return sorted(entries, key=lambda e: -e["loc"]), len(files)
+
+
+__all__ = ["detect_large_files"]

@@ -19,14 +19,17 @@ if TYPE_CHECKING:
 def _resolve_fixer_results(
     state: dict, results: list[dict], detector: str, fixer_name: str
 ) -> list[str]:
+    work_items = state.get("work_items") or state.get("issues", {})
+    state["work_items"] = work_items
+    state["issues"] = work_items
     resolved_ids = []
     for result in results:
         result_file = rel(result["file"])
         for symbol in result["removed"]:
             issue_id = f"{detector}::{result_file}::{symbol}"
-            if issue_id in state["issues"] and state["issues"][issue_id]["status"] == "open":
-                state["issues"][issue_id]["status"] = "fixed"
-                state["issues"][issue_id]["note"] = (
+            if issue_id in work_items and work_items[issue_id]["status"] == "open":
+                work_items[issue_id]["status"] = "fixed"
+                work_items[issue_id]["note"] = (
                     f"auto-fixed by desloppify autofix {fixer_name}"
                 )
                 resolved_ids.append(issue_id)

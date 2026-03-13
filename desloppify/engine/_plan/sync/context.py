@@ -35,10 +35,13 @@ def has_objective_backlog(
     if policy is not None:
         return policy.has_objective_backlog
 
-    # Accept either full state payload (`{"issues": ...}`) or raw issues dict.
+    # Accept either full state payload (`{"work_items": ...}`) or a raw
+    # work-item mapping, with legacy ``issues`` as a fallback alias.
     issues = state_or_issues
     if isinstance(state_or_issues, dict):
-        maybe_issues = state_or_issues.get("issues")
+        maybe_issues = state_or_issues.get("work_items")
+        if not isinstance(maybe_issues, dict):
+            maybe_issues = state_or_issues.get("issues")
         if isinstance(maybe_issues, dict):
             issues = maybe_issues
     return any(

@@ -103,7 +103,7 @@ def write_status_query(request: StatusQueryRequest) -> None:
     verified_strict_score = request.verified_strict_score
     plan = request.plan
 
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     open_scope = (
         open_scope_breakdown(issues, state.get("scan_path"))
         if isinstance(issues, dict)

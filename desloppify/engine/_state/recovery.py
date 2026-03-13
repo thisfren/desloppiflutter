@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from desloppify.engine._state.issue_semantics import ensure_work_item_semantics
 from desloppify.engine._state.schema import ensure_state_defaults, scan_source
 
 
@@ -93,7 +94,7 @@ def _hydrate_saved_issue_ids(
     issue_ids: list[str],
 ) -> dict:
     recovered = dict(state)
-    issues = state.get("issues", {})
+    issues = (state.get("work_items") or state.get("issues", {}))
     recovered_issues = dict(issues) if isinstance(issues, dict) else {}
 
     for issue_id in issue_ids:
@@ -114,7 +115,9 @@ def _hydrate_saved_issue_ids(
                 "recovered_from_plan": True,
             },
         }
+        ensure_work_item_semantics(recovered_issues[issue_id])
 
+    recovered["work_items"] = recovered_issues
     recovered["issues"] = recovered_issues
     recovered["scan_metadata"] = {
         "source": "plan_reconstruction",

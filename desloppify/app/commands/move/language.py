@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-import importlib
-import logging
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
 
+from desloppify.app.commands.helpers.dynamic_loaders import (
+    load_language_move_module as load_dynamic_language_move_module,
+)
 from desloppify.languages import framework as lang_mod
-from desloppify.app.commands.helpers.lang import load_lang_config, resolve_lang
-from desloppify.base.exception_sets import CommandError
-
-logger = logging.getLogger(__name__)
+from desloppify.app.commands.helpers.lang import load_lang_config_metadata, resolve_lang
 
 
 def _build_ext_to_lang_map() -> dict[str, str]:
     """Build extension→language map from registered language configs."""
     ext_map: dict[str, str] = {}
     for lang_name in lang_mod.available_langs():
-        cfg = load_lang_config(lang_name)
+        cfg = load_lang_config_metadata(lang_name)
+        if cfg is None:
+            continue
         for ext in cfg.extensions:
             ext_map.setdefault(ext, lang_name)
     return ext_map
@@ -79,26 +79,7 @@ def load_lang_move_module(lang_name: str) -> ModuleType:
     Falls back to the shared scaffold move module when a language does not
     provide its own ``move.py``.
     """
-    module_name = f"desloppify.languages.{lang_name}.move"
-    try:
-        return importlib.import_module(module_name)
-    except ImportError as exc:
-        if exc.name != module_name:
-            raise CommandError(
-                f"Failed to import language move module {module_name}: {exc}"
-            ) from exc
-        logger.debug(
-            "Language-specific move module missing: %s",
-            module_name,
-        )
-    # Fall back to the scaffold move module that provides default stubs.
-    scaffold_module = "desloppify.languages._framework.scaffold_move"
-    try:
-        return importlib.import_module(scaffold_module)
-    except ImportError as exc:
-        raise CommandError(
-            f"Move not yet supported for language: {lang_name} ({exc})"
-        ) from exc
+    return load_dynamic_language_move_module(lang_name)
 
 
 def resolve_move_verify_hint(move_mod: ModuleType) -> str:

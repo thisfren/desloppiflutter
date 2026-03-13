@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 
 CoverageStatus = Literal["full", "reduced"]
@@ -22,6 +22,18 @@ class DetectorCoverageRecord(TypedDict, total=False):
     remediation: str
     tool: str
     reason: str
+
+
+class DetectorEntry(TypedDict):
+    """Shared normalized detector-entry shape across framework boundaries."""
+
+    file: str
+    tier: int
+    confidence: str
+    summary: str
+    line: NotRequired[int]
+    detail: NotRequired[dict[str, Any]]
+    name: NotRequired[str]
 
 
 class ScanCoverageRecord(TypedDict, total=False):
@@ -52,7 +64,7 @@ class DetectorCoverageStatus:
 class LangSecurityResult:
     """Normalized return shape for language-specific security hooks."""
 
-    entries: list[dict]
+    entries: list[DetectorEntry]
     files_scanned: int
     coverage: DetectorCoverageStatus | None = None
 
@@ -100,6 +112,7 @@ class LangValueSpec:
 __all__ = [
     "BoundaryRule",
     "CoverageStatus",
+    "DetectorEntry",
     "DetectorCoverageRecord",
     "DetectorCoverageStatus",
     "FixerConfig",

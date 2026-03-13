@@ -27,3 +27,16 @@ def test_validate_attestation_reflect_accepts_dimension_or_cluster_reference() -
         cluster_names=["cluster-core"],
     )
     assert error is None
+
+
+def test_validate_attestation_enrich_accepts_executor_ready_work_product() -> None:
+    error = confirmations_mod.validate_attestation(
+        (
+            "The planned steps are executor-ready with concrete file paths, "
+            "issue refs, detailed instructions, and effort tags verified "
+            "against the codebase."
+        ),
+        "enrich",
+        cluster_names=["cluster-core"],
+    )
+    assert error is None

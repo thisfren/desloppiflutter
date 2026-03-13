@@ -43,6 +43,7 @@ class PlanLoadStatus:
     plan: PlanModel | None
     degraded: bool
     error_kind: str | None = None
+    recovery: str | None = None
 
 
 def get_plan_file() -> Path:
@@ -89,36 +90,11 @@ def plan_lock(path: Path | None = None) -> Iterator[None]:
         os.close(fd)
 
 
-def load_plan(path: Path | None = None) -> PlanModel:
-    """Load plan from disk, or return empty plan on missing/corruption."""
-    plan_path = path or _default_plan_file()
-    if not plan_path.exists():
-        return empty_plan()
-
-    try:
-        data = json.loads(plan_path.read_text())
-    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as ex:
-        # Try backup before giving up
-        backup = plan_path.with_suffix(".json.bak")
-        if backup.exists():
-            try:
-                data = json.loads(backup.read_text())
-                logger.warning("Plan file corrupted (%s), loaded from backup.", ex)
-                print(f"  Warning: Plan file corrupted ({ex}), loaded from backup.", file=sys.stderr)
-                # Fall through to validation below
-            except (json.JSONDecodeError, UnicodeDecodeError, OSError) as backup_ex:
-                logger.warning("Plan file and backup both corrupted: %s / %s", ex, backup_ex)
-                print(f"  Warning: Plan file corrupted ({ex}). Starting fresh.", file=sys.stderr)
-                return empty_plan()
-        else:
-            logger.warning("Plan file corrupted (%s). Starting fresh.", ex)
-            print(f"  Warning: Plan file corrupted ({ex}). Starting fresh.", file=sys.stderr)
-            return empty_plan()
-
+def _load_validated_plan(plan_path: Path) -> PlanModel:
+    """Load, normalize, and validate one plan payload from disk."""
+    data = json.loads(plan_path.read_text())
     if not isinstance(data, dict):
-        logger.warning("Plan file root is not a JSON object. Starting fresh.")
-        print("  Warning: Plan file root must be a JSON object. Starting fresh.", file=sys.stderr)
-        return empty_plan()
+        raise ValueError("Plan file root must be a JSON object.")
 
     version = data.get("version", 1)
     if version > PLAN_VERSION:
@@ -130,13 +106,7 @@ def load_plan(path: Path | None = None) -> PlanModel:
         )
 
     ensure_plan_defaults(data)
-    try:
-        validate_plan(data)
-    except ValueError as ex:
-        logger.warning("Plan invariants invalid (%s). Starting fresh.", ex)
-        print(f"  Warning: Plan invariants invalid ({ex}). Starting fresh.", file=sys.stderr)
-        return empty_plan()
-
+    validate_plan(data)
     return cast(PlanModel, data)
 
 
@@ -144,19 +114,57 @@ def resolve_plan_load_status(path: Path | None = None) -> PlanLoadStatus:
     """Load a plan with explicit degraded-mode metadata."""
     plan_path = path or _default_plan_file()
     if not plan_path.exists():
-        return PlanLoadStatus(plan=None, degraded=False, error_kind=None)
+        return PlanLoadStatus(plan=None, degraded=False, error_kind=None, recovery=None)
     try:
         return PlanLoadStatus(
-            plan=load_plan(plan_path),
+            plan=_load_validated_plan(plan_path),
             degraded=False,
             error_kind=None,
+            recovery=None,
         )
     except PLAN_LOAD_EXCEPTIONS as exc:
+        backup = plan_path.with_suffix(".json.bak")
+        if backup.exists():
+            try:
+                plan = _load_validated_plan(backup)
+                logger.warning(
+                    "Plan file load degraded for %s (%s); recovered from backup %s.",
+                    plan_path,
+                    exc,
+                    backup,
+                )
+                print(
+                    f"  Warning: Plan file load degraded ({exc}); recovered from backup.",
+                    file=sys.stderr,
+                )
+                return PlanLoadStatus(
+                    plan=plan,
+                    degraded=True,
+                    error_kind=exc.__class__.__name__,
+                    recovery="backup",
+                )
+            except PLAN_LOAD_EXCEPTIONS as backup_exc:
+                logger.warning(
+                    "Plan file and backup both failed for %s: %s / %s",
+                    plan_path,
+                    exc,
+                    backup_exc,
+                )
+
+        logger.warning("Plan file load degraded for %s (%s); starting fresh.", plan_path, exc)
+        print(f"  Warning: Plan file load degraded ({exc}); starting fresh.", file=sys.stderr)
         return PlanLoadStatus(
-            plan=None,
+            plan=empty_plan(),
             degraded=True,
             error_kind=exc.__class__.__name__,
+            recovery="fresh_start",
         )
+
+
+def load_plan(path: Path | None = None) -> PlanModel:
+    """Load plan from disk, or return empty plan on missing/corruption."""
+    status = resolve_plan_load_status(path)
+    return status.plan or empty_plan()
 
 
 def save_plan(plan: PlanModel | dict, path: Path | None = None) -> None:
