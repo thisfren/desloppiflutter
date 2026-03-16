@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "desloppify"
-version = "0.9.9"
-description = "Multi-language codebase health scanner and technical debt tracker"
+name = "desloppiflutter"
+version = "0.1.0"
+description = "Codebase health scanner for Flutter and Firebase projects"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -48,6 +48,7 @@ full = [
 ]
 
 [project.scripts]
+desloppiflutter = "desloppify.cli:main"
 desloppify = "desloppify.cli:main"
 
 [tool.setuptools.packages.find]
