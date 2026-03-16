@@ -70,12 +70,12 @@ def test_register_lang_returns_class_unchanged():
 # ── get_lang ─────────────────────────────────────────────────
 
 
-def test_get_lang_python():
-    """get_lang('python') returns a LangConfig for Python."""
-    cfg = get_lang("python")
+def test_get_lang_dart():
+    """get_lang('dart') returns a LangConfig for Dart."""
+    cfg = get_lang("dart")
     assert isinstance(cfg, LangConfig)
-    assert cfg.name == "python"
-    assert ".py" in cfg.extensions
+    assert cfg.name == "dart"
+    assert ".dart" in cfg.extensions
 
 
 def test_get_lang_typescript():
@@ -94,22 +94,19 @@ def test_get_lang_unknown_raises():
 
 def test_get_lang_returns_same_instance():
     """get_lang returns the registered instance (not a fresh copy)."""
-    cfg1 = get_lang("python")
-    cfg2 = get_lang("python")
+    cfg1 = get_lang("dart")
+    cfg2 = get_lang("dart")
     assert cfg1 is cfg2
 
 
 # ── available_langs ──────────────────────────────────────────
 
 
-def test_available_langs_includes_python_and_typescript():
-    """available_langs includes python, typescript, csharp, dart, and gdscript."""
+def test_available_langs_includes_dart_and_typescript():
+    """available_langs includes dart and typescript."""
     langs = available_langs()
-    assert "python" in langs
-    assert "typescript" in langs
-    assert "csharp" in langs
     assert "dart" in langs
-    assert "gdscript" in langs
+    assert "typescript" in langs
 
 
 def test_available_langs_returns_sorted():
@@ -121,17 +118,15 @@ def test_available_langs_returns_sorted():
 # ── auto_detect_lang ─────────────────────────────────────────
 
 
-def test_auto_detect_python_project(tmp_path):
-    """Project with pyproject.toml auto-detects as python."""
-    (tmp_path / "pyproject.toml").write_text("[tool.pytest]\n")
-    # Create at least one .py file so the file count is > 0
-    src = tmp_path / "src"
-    src.mkdir()
-    (src / "main.py").write_text("print('hello')")
+def test_auto_detect_dart_project(tmp_path):
+    """Project with pubspec.yaml auto-detects as dart."""
+    (tmp_path / "pubspec.yaml").write_text("name: demo_app\n")
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "main.dart").write_text("void main() {}")
 
-    # Patch PROJECT_ROOT to tmp_path for file_finder
     result = auto_detect_lang(tmp_path)
-    assert result == "python"
+    assert result == "dart"
 
 
 def test_auto_detect_typescript_project(tmp_path):
@@ -151,58 +146,14 @@ def test_auto_detect_no_config_returns_none(tmp_path):
     assert result is None
 
 
-def test_auto_detect_csharp_project(tmp_path):
-    """Project with .sln and .cs files auto-detects as csharp."""
-    (tmp_path / "Example.sln").write_text("Microsoft Visual Studio Solution File")
-    src = tmp_path / "src"
-    src.mkdir()
-    (src / "Program.cs").write_text("namespace App; class Program {}")
-
-    result = auto_detect_lang(tmp_path)
-    assert result == "csharp"
-
-
-def test_auto_detect_dart_project(tmp_path):
-    """Project with pubspec.yaml and .dart files auto-detects as dart."""
-    (tmp_path / "pubspec.yaml").write_text("name: demo_app\n")
-    lib = tmp_path / "lib"
-    lib.mkdir()
-    (lib / "main.dart").write_text("void main() {}")
-
-    result = auto_detect_lang(tmp_path)
-    assert result == "dart"
-
-
-def test_auto_detect_gdscript_project(tmp_path):
-    """Project with project.godot and .gd files auto-detects as gdscript."""
-    (tmp_path / "project.godot").write_text("[application]\n")
-    src = tmp_path / "src"
-    src.mkdir()
-    (src / "player.gd").write_text("extends Node\n")
-
-    result = auto_detect_lang(tmp_path)
-    assert result == "gdscript"
-
-
-def test_auto_detect_rust_project(tmp_path):
-    """Project with Cargo.toml and .rs files auto-detects as rust."""
-    (tmp_path / "Cargo.toml").write_text(
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
-    )
-    src = tmp_path / "src"
-    src.mkdir()
-    (src / "main.rs").write_text("fn main() {}\n")
-
-    result = auto_detect_lang(tmp_path)
-    assert result == "rust"
 
 
 # ── LangConfig basics ───────────────────────────────────────
 
 
-def test_python_config_has_phases():
-    """Python config has at least one detector phase."""
-    cfg = get_lang("python")
+def test_dart_config_has_phases():
+    """Dart config has at least one detector phase."""
+    cfg = get_lang("dart")
     assert len(cfg.phases) > 0
 
 
@@ -212,16 +163,16 @@ def test_typescript_config_has_phases():
     assert len(cfg.phases) > 0
 
 
-def test_python_config_has_extract_functions():
-    """Python config has an extract_functions callable."""
-    cfg = get_lang("python")
+def test_dart_config_has_extract_functions():
+    """Dart config has an extract_functions callable."""
+    cfg = get_lang("dart")
     assert cfg.extract_functions is not None
     assert callable(cfg.extract_functions)
 
 
-def test_python_config_has_file_finder():
-    """Python config has a file_finder callable."""
-    cfg = get_lang("python")
+def test_dart_config_has_file_finder():
+    """Dart config has a file_finder callable."""
+    cfg = get_lang("dart")
     assert cfg.file_finder is not None
     assert callable(cfg.file_finder)
 
@@ -240,9 +191,9 @@ def test_all_languages_have_valid_default_scan_profile():
         assert cfg.default_scan_profile in {"objective", "full", "ci"}
 
 
-def test_csharp_config_includes_test_coverage_phase():
-    """C# plugin should include shared test coverage phase like other first-party languages."""
-    cfg = get_lang("csharp")
+def test_dart_config_includes_test_coverage_phase():
+    """Dart plugin should include shared test coverage phase like other first-party languages."""
+    cfg = get_lang("dart")
     labels = [phase.label for phase in cfg.phases]
     assert any("Test coverage" in label for label in labels)
 
@@ -409,7 +360,7 @@ def test_load_all_surfaces_import_failures(monkeypatch, caplog):
     real_import_module = importlib.import_module
 
     def fake_import_module(name, package=None):
-        if name == ".python":
+        if name == ".dart":
             raise ImportError("simulated import failure")
         return real_import_module(name, package)
 
@@ -423,9 +374,9 @@ def test_load_all_surfaces_import_failures(monkeypatch, caplog):
 
         with caplog.at_level(logging.WARNING):
             load_all()
-        assert ".python" in caplog.text
+        assert ".dart" in caplog.text
         assert "simulated import failure" in caplog.text
-        assert ".python" in registry_state.get_load_errors()
+        assert ".dart" in registry_state.get_load_errors()
     finally:
         registry_state.clear()
         for name, cfg in original_registry.items():

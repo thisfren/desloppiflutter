@@ -19,16 +19,11 @@ def _infer_lang_name(test_files: set[str], production_files: set[str]) -> str | 
     """Infer language from known file extensions when explicit lang is unavailable."""
     paths = list(test_files) + list(production_files)
     ext_to_lang = {
-        ".py": "python",
-        ".pyi": "python",
+        ".dart": "dart",
         ".ts": "typescript",
         ".tsx": "typescript",
         ".js": "typescript",
         ".jsx": "typescript",
-        ".cs": "csharp",
-        ".php": "php",
-        ".go": "go",
-        ".rs": "rust",
     }
     counts: dict[str, int] = {}
     for file_path in paths:

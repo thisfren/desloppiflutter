@@ -10,7 +10,13 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in {
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [ pkgs.python3 ];
+        buildInputs = [
+          (pkgs.python3.withPackages (ps: with ps; [
+            pytest
+            pyyaml
+            pillow
+          ]))
+        ];
         shellHook = ''
           export PATH="$PATH:$HOME/.pub-cache/bin"
         '';

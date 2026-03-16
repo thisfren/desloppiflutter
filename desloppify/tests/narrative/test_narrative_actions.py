@@ -52,14 +52,14 @@ class TestComputeActions:
         assert len(result) >= 1
         assert any(a["detector"] == "unused" for a in result)
 
-    def test_python_gets_manual_fix(self, empty_state):
+    def test_dart_gets_manual_fix(self, empty_state):
         result = _compute_actions(
             ActionContext(
                 by_detector={"unused": 5},
                 dimension_scores={},
                 state=empty_state,
                 debt={},
-                lang="python",
+                lang="dart",
             )
         )
         if result:
@@ -271,9 +271,9 @@ class TestComputeTools:
         result = _compute_tools({"unused": 5}, {}, "typescript", {})
         assert len(result["fixers"]) >= 1
 
-    def test_no_fixers_for_python(self):
-        state = {"lang_capabilities": {"python": {"fixers": []}}}
-        result = _compute_tools({"unused": 5}, state, "python", {})
+    def test_no_fixers_for_dart(self):
+        state = {"lang_capabilities": {"dart": {"fixers": []}}}
+        result = _compute_tools({"unused": 5}, state, "dart", {})
         assert result["fixers"] == []
 
     def test_move_relevant_with_coupling(self):

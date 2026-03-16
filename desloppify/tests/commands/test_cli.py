@@ -337,10 +337,10 @@ class TestCreateParser:
         with pytest.raises(SystemExit):
             parser.parse_args(["detect", "deps", "--roslyn-cmd", "legacy"])
 
-    def test_lang_opt_parsed_for_csharp(self):
-        args = SimpleNamespace(lang_opt=["roslyn_cmd=fake-roslyn --json"])
+    def test_lang_opt_parsed_for_dart(self):
+        args = SimpleNamespace(lang_opt=[])
         options = resolve_lang_runtime_options(args, DartConfig())
-        assert options["roslyn_cmd"] == "fake-roslyn --json"
+        assert options == {}
 
     def test_lang_opt_rejects_invalid_key_value_pair(self):
         args = SimpleNamespace(lang_opt=["not_a_pair"])
@@ -353,15 +353,14 @@ class TestCreateParser:
         lang = DartConfig()
         config = {
             "languages": {
-                "csharp": {
-                    "corroboration_min_signals": 3,
-                    "high_fanout_threshold": 8,
+                "dart": {
+                    "unknown_key": 42,
                 }
             }
         }
         settings = resolve_lang_settings(config, lang)
-        assert settings["corroboration_min_signals"] == 3
-        assert settings["high_fanout_threshold"] == 8
+        # DartConfig has no setting_specs, so normalize_settings returns empty
+        assert isinstance(settings, dict)
 
     def test_move_command(self, parser):
         args = parser.parse_args(["move", "src/foo.py", "src/bar/foo.py", "--dry-run"])
@@ -773,10 +772,10 @@ class TestResolveDefaultPath:
 
 class TestResolveLang:
     def test_prefers_explicit_lang(self):
-        args = SimpleNamespace(lang="python", path="/tmp/somewhere")
+        args = SimpleNamespace(lang="dart", path="/tmp/somewhere")
         lang = resolve_lang(args)
         assert lang is not None
-        assert lang.name == "python"
+        assert lang.name == "dart"
 
     def test_auto_detect_uses_path_when_it_looks_like_project_root(
         self, tmp_path, monkeypatch
@@ -808,16 +807,16 @@ class TestResolveLang:
     ):
         root = tmp_path / "project"
         root.mkdir()
-        (root / "pyproject.toml").write_text("[tool.pytest]\n")
-        src = root / "src"
-        src.mkdir()
-        (src / "main.py").write_text("print('x')\n")
+        (root / "pubspec.yaml").write_text("name: demo_app\n")
+        lib = root / "lib"
+        lib.mkdir()
+        (lib / "main.dart").write_text("void main() {}\n")
 
         monkeypatch.setattr(lang_helpers_mod, "get_project_root", lambda: root)
-        args = SimpleNamespace(lang=None, path=str(src))
+        args = SimpleNamespace(lang=None, path=str(lib))
         lang = resolve_lang(args)
         assert lang is not None
-        assert lang.name == "python"
+        assert lang.name == "dart"
 
     def test_auto_detect_walks_up_from_external_subdir_path(
         self, tmp_path, monkeypatch
@@ -854,19 +853,19 @@ class TestResolveLang:
         for i in range(3):
             (ts_dir / f"view_{i}.ts").write_text("export const x = 1\n")
 
-        py_dir = root / "scripts"
-        py_dir.mkdir()
+        dart_dir = root / "mobile"
+        dart_dir.mkdir()
         for i in range(2):
-            (py_dir / f"job_{i}.py").write_text("print('x')\n")
+            (dart_dir / f"screen_{i}.dart").write_text("void main() {}\n")
 
         monkeypatch.setattr(lang_helpers_mod, "get_project_root", lambda: root)
 
-        # Path points to python subtree; detection should use this subtree first,
+        # Path points to dart subtree; detection should use this subtree first,
         # not the entire repo where TypeScript files are more numerous.
-        args = SimpleNamespace(lang=None, path=str(py_dir))
+        args = SimpleNamespace(lang=None, path=str(dart_dir))
         lang = resolve_lang(args)
         assert lang is not None
-        assert lang.name == "python"
+        assert lang.name == "dart"
 
     def test_lang_config_markers_include_plugin_markers(self, monkeypatch):
         class DummyCfg:

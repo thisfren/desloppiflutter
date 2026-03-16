@@ -508,23 +508,16 @@ class TestStubs:
 @pytest.mark.usefixtures("_cleanup_registry")
 class TestLangsCommand:
     def test_all_builtin_langs_discoverable(self):
-        """All full plugins and generic plugins should be available."""
+        """All full plugins should be available."""
         from desloppify.languages import available_langs
 
         names = available_langs()
         for full_lang in [
-            "python",
-            "typescript",
-            "csharp",
             "dart",
-            "gdscript",
-            "go",
-            "rust",
+            "typescript",
         ]:
             assert full_lang in names, f"{full_lang} not found in {names}"
-        for generic_lang_name in ["ruby", "java", "kotlin"]:
-            assert generic_lang_name in names, f"{generic_lang_name} not found in {names}"
-        assert len(names) > 10, f"Expected >10 languages, got {len(names)}: {names}"
+        assert len(names) >= 2, f"Expected >=2 languages, got {len(names)}: {names}"
 
     def test_langs_hides_shared_phases_from_tool_list(self):
         from desloppify.app.commands.langs import _get_tool_labels

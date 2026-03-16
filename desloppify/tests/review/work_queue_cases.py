@@ -878,11 +878,5 @@ def test_registry_standalone_threshold_count():
         "patterns",
         "props",
         "react",
-        "rust_api_convention",
-        "rust_async_locking",
-        "rust_drop_safety",
-        "rust_error_boundary",
-        "rust_future_proofing",
-        "rust_thread_safety",
         "smells",
     ])

@@ -102,7 +102,7 @@ def _zone_set(args: argparse.Namespace):
     # Apply immediately to state
     try:
         sp = state_path(args)
-        if sp.exists():
+        if sp is not None and sp.exists():
             state = load_state(sp)
             issues = (state.get("work_items") or state.get("issues", {}))
             updated = 0
@@ -136,7 +136,7 @@ def _zone_clear(args: argparse.Namespace):
         # Re-stamp matching issues to default zone; next scan will reclassify.
         try:
             sp = state_path(args)
-            if sp.exists():
+            if sp is not None and sp.exists():
                 state = load_state(sp)
                 issues = (state.get("work_items") or state.get("issues", {}))
                 updated = 0
