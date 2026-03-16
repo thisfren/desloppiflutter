@@ -1,8 +1,8 @@
-# Desloppify - an agent harness to make your codebase 🤌
+# DesloppiFlutter - codebase health for Flutter + Firebase projects 🤌
 
-[![PyPI version](https://img.shields.io/pypi/v/desloppify)](https://pypi.org/project/desloppify/) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 
-Desloppify gives your AI coding agent the tools to identify, understand, and systematically improve codebase quality. It combines mechanical detection (dead code, duplication, complexity) with subjective LLM review (naming, abstractions, module boundaries), then works through a prioritized fix loop. State persists across scans so it chips away over multiple sessions, and the scoring is designed to resist gaming.
+DesloppiFlutter is a customized fork of [Desloppify](https://github.com/peteromallet/desloppify) focused on **Flutter (Dart) and Firebase (TypeScript Cloud Functions)** projects. It gives your AI coding agent the tools to identify, understand, and systematically improve codebase quality — combining mechanical detection (dead code, duplication, complexity) with subjective LLM review (naming, abstractions, module boundaries), then works through a prioritized fix loop.
 
 <img src="assets/explained.png" width="100%">
 
@@ -12,7 +12,7 @@ That score generates a scorecard badge for your GitHub profile or README:
 
 <img src="assets/scorecard.png" width="100%">
 
-Currently supports 29 languages — full plugin depth for TypeScript, Python, C#, C++, Dart, GDScript, Go, and Rust; generic linter + tree-sitter support for Ruby, Java, Kotlin, and 18 more. For C++ projects, `compile_commands.json` is the primary analysis path and `Makefile` repositories fall back to best-effort local include scanning.
+Supports **Dart/Flutter** and **TypeScript** with full plugin depth, including Firebase-specific detectors for Dart (direct access patterns, hardcoded collections, unhandled errors).
 
 ## For your agent's consideration...
 
@@ -69,6 +69,6 @@ If you'd like to join a community of vibe engineers who want to build beautiful 
 
 ---
 
-Issues, improvements, and PRs are hugely appreciated — [github.com/peteromallet/desloppify](https://github.com/peteromallet/desloppify).
+This is a fork of [Desloppify](https://github.com/peteromallet/desloppify) by Peter O'Malley. Issues, improvements, and PRs are welcome.
 
 MIT License
