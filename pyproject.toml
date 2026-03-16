@@ -38,15 +38,11 @@ treesitter = [
   "tree-sitter>=0.21",
   "tree-sitter-language-pack>=0.3",
 ]
-csharp-xml = ["defusedxml>=0.7.0"]
-python-security = ["bandit>=1.7.8"]
 scorecard = ["Pillow>=9.0.0"]
 plan-yaml = ["PyYAML>=6.0"]
 full = [
-  "defusedxml>=0.7.0",
   "tree-sitter>=0.21",
   "tree-sitter-language-pack>=0.3",
-  "bandit>=1.7.8",
   "Pillow>=9.0.0",
   "PyYAML>=6.0",
 ]
@@ -63,18 +59,12 @@ include-package-data = false
 
 [tool.setuptools.package-data]
 "desloppify.languages._framework" = ["review_data/*.json"]
-"desloppify.languages.python" = ["review_data/*.json"]
-"desloppify.languages.typescript" = ["review_data/*.json"]
-"desloppify.languages.csharp" = ["review_data/*.json"]
-"desloppify.languages.cxx" = ["review_data/*.json"]
 "desloppify.languages.dart" = ["review_data/*.json"]
-"desloppify.languages.gdscript" = ["review_data/*.json"]
-"desloppify.languages.go" = ["review_data/*.json"]
-"desloppify.languages.rust" = ["review_data/*.json"]
+"desloppify.languages.typescript" = ["review_data/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ['desloppify/tests', 'desloppify/languages/python/tests', 'desloppify/languages/typescript/tests', 'desloppify/languages/csharp/tests', 'desloppify/languages/cxx/tests', 'desloppify/languages/dart/tests', 'desloppify/languages/gdscript/tests', 'desloppify/languages/go/tests', 'desloppify/languages/rust/tests']
+testpaths = ['desloppify/tests', 'desloppify/languages/dart/tests', 'desloppify/languages/typescript/tests']
 norecursedirs = ["desloppify/tests/fixtures"]
 
 [tool.ruff]
