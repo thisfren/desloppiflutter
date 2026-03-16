@@ -24,7 +24,7 @@ from desloppify.languages.dart.extractors import (
     extract_functions,
     find_dart_files,
 )
-from desloppify.languages.dart.phases import phase_coupling, phase_structural
+from desloppify.languages.dart.phases import phase_coupling, phase_firebase, phase_structural
 from desloppify.languages.dart.review import (
     HOLISTIC_REVIEW_DIMENSIONS,
     LOW_VALUE_PATTERN,
@@ -74,6 +74,7 @@ class DartConfig(LangConfig):
                 *all_treesitter_phases("dart"),
                 detector_phase_signature(),
                 detector_phase_test_coverage(),
+                DetectorPhase("Firebase patterns", phase_firebase),
                 detector_phase_security(),
                 *shared_subjective_duplicates_tail(),
             ],

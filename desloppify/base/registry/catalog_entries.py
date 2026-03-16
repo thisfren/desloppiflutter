@@ -317,6 +317,36 @@ DETECTORS: dict[str, DetectorMeta] = {
         "refactor",
         "address design concerns confirmed by subjective evaluation",
     ),
+    # ── Firebase ───────────────────────────────────────────
+    "firebase_direct_access": DetectorMeta(
+        "firebase_direct_access",
+        "firebase direct access",
+        "Code quality",
+        "refactor",
+        "wrap Firebase calls in a repository or service class for testability",
+        needs_judgment=True,
+        standalone_threshold="medium",
+        tier=3,
+        subjective_dimensions=("design_coherence", "abstraction_fitness"),
+    ),
+    "firebase_hardcoded_collection": DetectorMeta(
+        "firebase_hardcoded_collection",
+        "firebase hardcoded collection",
+        "Code quality",
+        "manual_fix",
+        "extract hardcoded Firestore collection names to named constants",
+        tier=3,
+        subjective_dimensions=("convention_outlier",),
+    ),
+    "firebase_unhandled_error": DetectorMeta(
+        "firebase_unhandled_error",
+        "firebase unhandled error",
+        "Code quality",
+        "manual_fix",
+        "add try/catch around Firebase calls to handle network and permission errors",
+        tier=3,
+        subjective_dimensions=("error_consistency",),
+    ),
     # ── Manual fix ────────────────────────────────────────
     "deprecated": DetectorMeta(
         "deprecated",

@@ -12,6 +12,7 @@ from desloppify.languages._framework.base.shared_phases import (
 )
 from desloppify.languages._framework.base.types import LangRuntimeContract
 from desloppify.languages.dart.detectors.deps import build_dep_graph
+from desloppify.languages.dart.detectors.firebase import detect_firebase_patterns
 from desloppify.state_io import Issue
 
 DART_COMPLEXITY_SIGNALS = [
@@ -60,3 +61,10 @@ def phase_coupling(path: Path, lang: LangRuntimeContract) -> tuple[list[Issue], 
         build_dep_graph_fn=build_dep_graph,
         log_fn=log,
     )
+
+
+def phase_firebase(path: Path, lang: LangRuntimeContract) -> tuple[list[Issue], dict[str, int]]:
+    """Detect Firebase antipatterns in Dart files."""
+    files = lang.file_finder(path)
+    entries, scanned = detect_firebase_patterns(files, lang.zone_map)
+    return entries, {"firebase": scanned}

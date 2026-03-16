@@ -874,6 +874,7 @@ def test_registry_standalone_threshold_count():
     assert sorted(threshold_detectors) == sorted([
         "dict_keys",
         "dupes",
+        "firebase_direct_access",
         "naming",
         "patterns",
         "props",
