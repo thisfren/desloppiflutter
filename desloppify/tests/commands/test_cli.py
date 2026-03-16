@@ -23,7 +23,7 @@ from desloppify.cli import (
     create_parser,
     state_path,
 )
-from desloppify.languages.csharp import CSharpConfig
+from desloppify.languages.dart import DartConfig
 
 # ===========================================================================
 # Module import
@@ -339,18 +339,18 @@ class TestCreateParser:
 
     def test_lang_opt_parsed_for_csharp(self):
         args = SimpleNamespace(lang_opt=["roslyn_cmd=fake-roslyn --json"])
-        options = resolve_lang_runtime_options(args, CSharpConfig())
+        options = resolve_lang_runtime_options(args, DartConfig())
         assert options["roslyn_cmd"] == "fake-roslyn --json"
 
     def test_lang_opt_rejects_invalid_key_value_pair(self):
         args = SimpleNamespace(lang_opt=["not_a_pair"])
         with pytest.raises(LangRuntimeOptionsError) as exc:
-            resolve_lang_runtime_options(args, CSharpConfig())
+            resolve_lang_runtime_options(args, DartConfig())
         assert "Invalid --lang-opt" in str(exc.value)
         assert "Expected KEY=VALUE" in str(exc.value)
 
     def test_language_settings_loaded_from_config_namespace(self):
-        lang = CSharpConfig()
+        lang = DartConfig()
         config = {
             "languages": {
                 "csharp": {

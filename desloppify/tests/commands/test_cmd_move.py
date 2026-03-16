@@ -269,7 +269,7 @@ class TestLoadLangMoveModule:
     """Language move-module loading behavior for missing vs broken imports."""
 
     def test_falls_back_to_scaffold_when_language_module_missing(self, monkeypatch):
-        target_module = "desloppify.languages.python.move"
+        target_module = "desloppify.languages.dart.move"
         scaffold_module = "desloppify.languages._framework.scaffold_move"
         scaffold = object()
 
@@ -287,10 +287,10 @@ class TestLoadLangMoveModule:
             "desloppify.app.commands.helpers.dynamic_loaders.importlib.import_module",
             _fake_import,
         )
-        assert load_lang_move_module("python") is scaffold
+        assert load_lang_move_module("dart") is scaffold
 
     def test_raises_when_language_module_import_is_broken(self, monkeypatch):
-        target_module = "desloppify.languages.python.move"
+        target_module = "desloppify.languages.dart.move"
 
         def _fake_import(module_name: str):
             if module_name == target_module:
@@ -305,7 +305,7 @@ class TestLoadLangMoveModule:
         )
 
         with pytest.raises(CommandError) as exc:
-            load_lang_move_module("python")
+            load_lang_move_module("dart")
         assert "Failed to import language move module" in str(exc.value)
         assert target_module in str(exc.value)
 

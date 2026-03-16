@@ -28,7 +28,7 @@ from desloppify.intelligence.review import (
     import_review_issues as _import_review_issues_impl,
 )
 from desloppify.languages._framework.runtime_support.runtime import make_lang_run
-from desloppify.languages.python import PythonConfig
+from desloppify.languages.dart import DartConfig
 from desloppify.languages.typescript import TypeScriptConfig
 from desloppify.state import empty_state, find_suspect_detectors
 
@@ -515,7 +515,7 @@ class TestRegistryIntegration:
 
 class TestPhaseIntegration:
     def test_phase_registered_in_python(self):
-        cfg = PythonConfig()
+        cfg = DartConfig()
         labels = [p.label for p in cfg.phases]
         assert "Subjective review" in labels
 
@@ -525,7 +525,7 @@ class TestPhaseIntegration:
         assert "Subjective review" in labels
 
     def test_review_cache_lives_on_lang_run(self):
-        cfg = PythonConfig()
+        cfg = DartConfig()
         assert not hasattr(cfg, "_review_cache")
 
         run = make_lang_run(cfg)
