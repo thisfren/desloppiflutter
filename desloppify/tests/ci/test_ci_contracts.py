@@ -11,7 +11,6 @@ yaml = pytest.importorskip("yaml")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-INTEGRATION_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "integration.yml"
 PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "python-publish.yml"
 CI_PLAN = REPO_ROOT / "docs" / "ci_plan.md"
 MAKEFILE = REPO_ROOT / "Makefile"
