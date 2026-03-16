@@ -11,10 +11,6 @@ from desloppify.base.discovery.file_paths import resolve_path
 from desloppify.base.discovery.source import SourceDiscoveryOptions, find_source_files
 from desloppify.base.text_utils import strip_c_style_comments
 from desloppify.engine.detectors.base import FunctionInfo
-from desloppify.languages.csharp._parse_helpers import (
-    find_matching_brace as _shared_find_matching_brace,
-)
-
 DART_FILE_EXCLUSIONS = ["build", ".dart_tool", ".fvm", ".git", "node_modules"]
 
 _FUNC_DECL_RE = re.compile(
@@ -37,7 +33,32 @@ def find_dart_files(path: Path | str) -> list[str]:
 
 
 def _find_matching_brace(content: str, open_pos: int) -> int | None:
-    return _shared_find_matching_brace(content, open_pos)
+    """Return index of matching '}' for a '{' at ``open_pos``."""
+    depth = 0
+    in_string: str | None = None
+    escape = False
+    for i in range(open_pos, len(content)):
+        ch = content[i]
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == in_string:
+                in_string = None
+            continue
+        if ch in ("'", '"'):
+            in_string = ch
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
 
 
 def _find_statement_end(content: str, start_pos: int) -> int | None:
