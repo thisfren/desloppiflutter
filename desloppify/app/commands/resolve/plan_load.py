@@ -107,10 +107,6 @@ def warn_plan_load_degraded_once(
     return warning
 
 
-def _reset_degraded_plan_warning_for_tests() -> None:
-    """Backward-compatible no-op kept for existing tests."""
-    return None
-
 
 __all__ = [
     "DegradedPlanWarning",

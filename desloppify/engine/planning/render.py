@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
+
+logger = logging.getLogger(__name__)
 
 from desloppify.base.exception_sets import PLAN_LOAD_EXCEPTIONS
 from desloppify.base.output.terminal import LOC_COMPACT_THRESHOLD
@@ -232,7 +235,8 @@ def generate_plan_md(state: PlanState, plan: dict | None = None) -> str:
         try:
             from desloppify.engine.plan_state import load_plan
             plan = load_plan()
-        except PLAN_LOAD_EXCEPTIONS:
+        except PLAN_LOAD_EXCEPTIONS as exc:
+            logger.debug("Plan auto-load failed in generate_plan_md, using empty plan: %s", exc)
             plan = {}
     if not isinstance(plan, dict):
         plan = {}

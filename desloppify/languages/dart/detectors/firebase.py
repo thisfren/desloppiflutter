@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from desloppify.base.discovery.file_paths import rel
 from desloppify.engine.policy.zones import FileZoneMap, Zone
@@ -55,7 +58,8 @@ def detect_firebase_patterns(
 
         try:
             content = Path(filepath).read_text(errors="replace")
-        except OSError:
+        except OSError as exc:
+            logger.debug("Failed to read %s: %s", filepath, exc)
             continue
 
         scanned += 1

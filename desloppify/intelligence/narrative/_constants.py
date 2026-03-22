@@ -27,7 +27,7 @@ on_detector_registered(_refresh_detector_tools)
 
 
 # Structural sub-detectors that merge under "structural"
-STRUCTURAL_MERGE = {"large", "complexity", "gods", "concerns"}
+STRUCTURAL_MERGE = {"large", "complexity", "gods", "concerns", "flat_dirs"}
 
 # Detector-level cascade: fixing one detector may auto-resolve issues in another.
 _DETECTOR_CASCADE = {

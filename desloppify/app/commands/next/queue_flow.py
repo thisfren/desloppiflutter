@@ -15,7 +15,7 @@ from desloppify.base.exception_sets import CommandError
 from desloppify.base.output.terminal import colorize
 from desloppify.base.output.user_message import print_user_message
 from desloppify.engine._state.filtering import path_scoped_issues
-from desloppify.engine._work_queue.context import queue_context
+from desloppify.engine._work_queue.context import QueueContext, queue_context
 from desloppify.engine._work_queue.core import QueueBuildOptions
 from desloppify.engine._work_queue.plan_order import (
     collapse_clusters,
@@ -285,7 +285,7 @@ def _resolve_queue_items(
     plan_for_queue: dict,
     target_strict: float,
     build_work_queue_fn,
-) -> tuple[object, dict, list[dict], str | None]:
+) -> tuple[QueueContext, dict, list[dict], str | None]:
     ctx = queue_context(
         state,
         target_strict=target_strict,

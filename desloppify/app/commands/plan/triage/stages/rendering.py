@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from desloppify.app.commands.helpers.issue_id_display import short_issue_id
 from desloppify.base.output.terminal import colorize
+from desloppify.engine.plan_triage import TriageInput
 
 from ..review_coverage import manual_clusters_with_issues
 
@@ -54,7 +55,7 @@ def _print_complete_summary(plan: dict, stages: dict) -> None:
         print(colorize("    Sense-check: content, structure & value verified", "dim"))
 
 
-def _print_new_issues_since_last(si) -> None:
+def _print_new_issues_since_last(si: TriageInput) -> None:
     print(colorize(f"  {len(si.new_since_last)} new issue(s) since last triage:", "cyan"))
     review_issues = getattr(si, "review_issues", getattr(si, "open_issues", {}))
     for fid in sorted(si.new_since_last):

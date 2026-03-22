@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from desloppify.languages.framework import LangRun
@@ -82,7 +85,7 @@ def _clear_needs_rescan_flag(config: dict[str, object]) -> None:
         config["needs_rescan"] = False
         _save_config(config)
     except OSError as exc:
-        _ = exc
+        logger.debug("could not clear needs_rescan flag in config: %s", exc)
         config["needs_rescan"] = True
 
 

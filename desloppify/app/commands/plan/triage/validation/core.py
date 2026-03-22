@@ -1,7 +1,6 @@
 """Validation and guardrail helpers for triage stage workflow."""
 
 from __future__ import annotations
-from collections.abc import Callable
 
 from desloppify.app.commands.helpers.command_runtime import command_runtime
 from desloppify.base.output.terminal import colorize
@@ -61,7 +60,6 @@ from .stage_policy import (
     ReflectAutoConfirmDeps,
     auto_confirm_observe_if_attested,
     auto_confirm_reflect_for_organize,
-    confirm_stage,
     require_prerequisite,
 )
 
@@ -70,25 +68,6 @@ _analyze_reflect_issue_accounting = analyze_reflect_issue_accounting
 _validate_reflect_issue_accounting = validate_reflect_accounting
 
 RecurringDimensionBuckets = dict[str, dict[str, list[str]]]
-
-
-def _auto_confirm_stage(
-    *,
-    plan: dict,
-    stage_record: dict,
-    attestation: str | None,
-    request: AutoConfirmStageRequest,
-    save_plan_fn: Callable[..., None] | None = None,
-    utc_now_fn: Callable[[], str] | None = None,
-) -> bool:
-    return confirm_stage(
-        plan=plan,
-        stage_record=stage_record,
-        attestation=attestation,
-        request=request,
-        save_plan_fn=save_plan_fn,
-        utc_now_fn=utc_now_fn,
-    )
 
 
 def _auto_confirm_observe_if_attested(

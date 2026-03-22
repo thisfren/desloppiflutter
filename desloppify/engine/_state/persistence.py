@@ -366,7 +366,7 @@ def state_lock(
     finally:
         try:
             _release_state_lock(lock_fd)
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.debug("Failed to release state lock: %s", exc)
         with contextlib.suppress(OSError):
             os.close(lock_fd)

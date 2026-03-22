@@ -43,7 +43,7 @@ def _has_inline_tests(filepath: str, lang_name: str) -> bool:
         try:
             return bool(has_inline(filepath, content))
         except (TypeError, ValueError):
-            logger.debug("inline_tests hook failed for %s", filepath, exc_info=True)
+            logger.warning("inline_tests hook failed for %s", filepath, exc_info=True)
     return False
 
 

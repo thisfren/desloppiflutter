@@ -25,7 +25,6 @@ import desloppify.languages._framework.generic_support.capabilities as capabilit
 import desloppify.languages._framework.generic_support.registration as registration_mod
 import desloppify.languages._framework.registry.registration as framework_registration_mod
 import desloppify.languages._framework.runtime_support.accessors as accessors_mod
-import desloppify.languages._framework.treesitter._specs as treesitter_specs_legacy_mod
 import desloppify.languages._framework.treesitter.analysis.cohesion as treesitter_cohesion_mod
 import desloppify.languages._framework.treesitter.imports.cache as treesitter_cache_mod
 import desloppify.languages._framework.treesitter.specs.specs as treesitter_specs_mod
@@ -128,13 +127,10 @@ def test_treesitter_grouped_namespaces_are_canonical() -> None:
         assert "Compatibility bridge" not in source
         assert "__getattr__" not in source
 
-    source = inspect.getsource(treesitter_specs_legacy_mod)
-    assert "Compatibility bridge to grouped tree-sitter namespace module." in source
-    assert "load_compat_exports" in source
-
     package_root = Path(__file__).resolve().parents[3] / "languages/_framework/treesitter"
     assert not (package_root / "_cache.py").exists()
     assert not (package_root / "_cohesion.py").exists()
+    assert not (package_root / "_specs.py").exists()
     assert not (package_root / "compat").exists()
 
 

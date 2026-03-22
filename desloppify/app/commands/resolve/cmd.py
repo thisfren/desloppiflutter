@@ -16,12 +16,13 @@ from desloppify.app.commands.helpers.queue_progress import show_score_with_plan_
 from desloppify.app.commands.helpers.state import state_path
 from desloppify.base.output.terminal import colorize
 from desloppify.engine._state.resolution import coerce_assessment_score
+from desloppify.state_compat import ScoreSnapshot
 from desloppify.state_io import load_state
 
 from .apply import _resolve_all_patterns, _write_resolve_query_entry
 from .living_plan import update_living_plan_after_resolve
 from .messages import print_fixed_next_user_message, print_no_match_warning
-from .plan_load import load_resolve_plan_access
+from .plan_load import ResolvePlanAccess, load_resolve_plan_access
 from .queue_guard import _check_queue_order_guard
 from .render import (
     _print_next_command,
@@ -52,7 +53,7 @@ def _load_state_with_guards(
     args: argparse.Namespace,
     *,
     attestation: str | None,
-) -> tuple[str, dict, object] | None:
+) -> tuple[str, dict, ResolvePlanAccess] | None:
     """Validate inputs, apply guardrails, and load state for resolve."""
     _validate_resolve_inputs(args, attestation)
     if not _validate_fixed_note(args):
@@ -88,8 +89,8 @@ def _resolve_ids_with_snapshots(
     args: argparse.Namespace,
     *,
     attestation: str | None,
-    plan_access,
-) -> tuple[object, dict[str, float], list[str]]:
+    plan_access: ResolvePlanAccess,
+) -> tuple[ScoreSnapshot, dict[str, float], list[str]]:
     """Apply resolve patterns and return pre/post context for rendering."""
     _enforce_batch_wontfix_confirmation(
         state,

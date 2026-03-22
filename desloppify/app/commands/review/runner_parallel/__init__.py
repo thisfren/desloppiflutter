@@ -139,7 +139,7 @@ def collect_batch_results(
                 context_updates,
             ) = normalize_result_fn(payload, allowed_dims)
         except ValueError as exc:
-            logger.debug("Invalid batch payload at index %s (%s): %s", idx, raw_path, exc)
+            logger.warning("Invalid batch payload at index %s (%s): %s", idx, raw_path, exc)
             failure_set.add(idx)
             continue
         if had_execution_failure:

@@ -194,7 +194,7 @@ def gather_auth_context(
     auth_usage_patterns: dict[str, int] = {}
 
     for filepath, content in file_contents.items():
-        if not _is_auth_source_file(filepath):
+        if not is_auth_runtime_path(filepath):
             continue
         rpath = rel_fn(filepath)
 
@@ -310,11 +310,6 @@ def is_auth_runtime_path(filepath: str) -> bool:
     if stem in _NON_RUNTIME_AUTH_BASENAMES:
         return False
     return True
-
-
-def _is_auth_source_file(filepath: str) -> bool:
-    """Backward-compatible wrapper for auth runtime-path filtering."""
-    return is_auth_runtime_path(filepath)
 
 
 __all__ = [

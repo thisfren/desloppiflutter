@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from desloppify.engine.plan_triage import TRIAGE_CMD_ORGANIZE
 from desloppify.base.output.terminal import colorize
-from desloppify.engine.plan_triage import extract_issue_citations
+from desloppify.engine.plan_triage import extract_issue_citations, TriageInput
 
 from ..display.dashboard import show_plan_summary
 from ..review_coverage import (
@@ -225,7 +225,7 @@ def _require_prior_strategy_for_confirm(meta: dict) -> bool:
     return False
 
 
-def _confirm_existing_stages_valid(*, stages: dict, has_only_additions: bool, si) -> bool:
+def _confirm_existing_stages_valid(*, stages: dict, has_only_additions: bool, si: TriageInput) -> bool:
     if has_only_additions:
         from ..stages.rendering import _print_new_issues_since_last  # noqa: PLC0415
 
@@ -285,7 +285,7 @@ def _confirmed_text_or_error(*, plan: dict, state: dict, confirmed: str | None) 
     return None
 
 
-def _note_cites_new_issues_or_error(note: str, si) -> bool:
+def _note_cites_new_issues_or_error(note: str, si: TriageInput) -> bool:
     new_ids = si.new_since_last
     if not new_ids:
         return True

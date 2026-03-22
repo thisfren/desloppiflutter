@@ -10,6 +10,7 @@ from desloppify.state_io import utc_now
 from ..display.dashboard import print_reflect_result
 from ..stage_queue import cascade_clear_dispositions, cascade_clear_later_confirmations, has_triage_in_queue
 from ..services import TriageServices, default_triage_services
+from desloppify.engine.plan_triage import TriageInput
 from ..validation.reflect_accounting import (
     ReflectDisposition,
     parse_reflect_dispositions,
@@ -55,7 +56,7 @@ def _validate_reflect_submission(
     stages: dict,
     attestation: str | None,
     services: TriageServices,
-) -> tuple[object, int, dict, list[str], set[str], list[str], list[str], list[ReflectDisposition]] | None:
+) -> tuple[TriageInput, int, dict, list[str], set[str], list[str], list[str], list[ReflectDisposition]] | None:
     if "observe" not in stages:
         print(colorize("  Cannot reflect: observe stage not complete.", "red"))
         print(colorize('  Run: desloppify plan triage --stage observe --report "..."', "dim"))

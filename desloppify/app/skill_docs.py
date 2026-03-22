@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 from desloppify.base.discovery.paths import get_project_root
 
@@ -64,7 +67,7 @@ def find_installed_skill() -> SkillInstall | None:
         try:
             content = full.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            _ = exc
+            logger.debug("skill_docs: could not read %s: %s", full, exc)
             continue
         version_match = SKILL_VERSION_RE.search(content)
         if not version_match:

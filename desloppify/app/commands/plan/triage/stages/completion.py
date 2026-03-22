@@ -38,6 +38,7 @@ from ..review_coverage import (
 )
 from ..stage_queue import has_triage_in_queue
 from ..services import TriageServices, default_triage_services
+from desloppify.engine.plan_triage import TriageInput
 from .helpers import active_triage_issue_scope, triage_scoped_plan
 
 
@@ -101,7 +102,7 @@ def _resolve_confirm_existing_context(
     plan: dict,
     services: TriageServices,
     stages: dict,
-) -> tuple[object, bool] | None:
+) -> tuple[TriageInput, bool] | None:
     """Load confirm-existing triage context and validate the stage prerequisites."""
     runtime = services.command_runtime(args)
     state = runtime.state
@@ -124,7 +125,7 @@ def _resolve_confirm_existing_inputs(
     plan: dict,
     state: dict,
     meta: dict,
-    si,
+    si: TriageInput,
     has_only_additions: bool,
 ) -> tuple[str, str, str] | None:
     """Validate and resolve note/strategy/confirmed inputs for confirm-existing."""

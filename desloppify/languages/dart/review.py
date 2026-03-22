@@ -8,6 +8,7 @@ HOLISTIC_REVIEW_DIMENSIONS: list[str] = [
     "cross_module_architecture",
     "error_consistency",
     "abstraction_fitness",
+    "authorization_consistency",
     "test_strategy",
     "design_coherence",
 ]

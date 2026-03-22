@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.rendering import print_agent_plan
@@ -113,7 +116,8 @@ def _zone_set(args: argparse.Namespace):
             if updated:
                 save_state(state, sp)
             print(f"  Applied to {updated} issue(s).")
-    except (ImportError, OSError, TypeError, ValueError):
+    except (OSError, ValueError) as exc:
+        logger.debug("zone set: could not apply to state immediately: %s", exc)
         print(colorize("  (Will apply on next scan.)", "dim"))
         return
 
@@ -147,7 +151,8 @@ def _zone_clear(args: argparse.Namespace):
                 if updated:
                     save_state(state, sp)
                 print(f"  Re-stamped {updated} issue(s) to 'production' (will reclassify on next scan).")
-        except (ImportError, OSError, TypeError, ValueError):
+        except (OSError, ValueError) as exc:
+            logger.debug("zone clear: could not apply to state immediately: %s", exc)
             print(colorize("  (Will apply on next scan.)", "dim"))
             return
     else:

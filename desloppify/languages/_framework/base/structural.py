@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from desloppify.base.discovery.file_paths import resolve_path
 from desloppify.base.discovery.file_paths import count_lines
@@ -11,7 +13,7 @@ from desloppify.engine._state.filtering import make_issue
 from desloppify.state_io import Issue
 
 
-def add_structural_signal(structural: dict, file: str, signal: str, detail: dict):
+def add_structural_signal(structural: dict[str, dict[str, Any]], file: str, signal: str, detail: dict[str, Any]) -> None:
     """Add a complexity signal to the per-file structural dict.
 
     Accumulates signals per file so they can be merged into tiered issues.
@@ -23,8 +25,8 @@ def add_structural_signal(structural: dict, file: str, signal: str, detail: dict
 
 
 def merge_structural_signals(
-    structural: dict,
-    stderr_fn,
+    structural: dict[str, dict[str, Any]],
+    stderr_fn: Callable[[str], object],
     *,
     complexity_only_min: int = 50,
 ) -> list[Issue]:

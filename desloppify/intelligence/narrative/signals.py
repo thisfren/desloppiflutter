@@ -282,6 +282,10 @@ def score_snapshot(state: StateModel) -> tuple[float | None, float | None]:
     return scores.strict, scores.overall
 
 
+# Legacy alias used by tests and older callers.
+strict_overall_scores = score_snapshot
+
+
 __all__ = [
     "compute_badge_status",
     "compute_primary_action",
@@ -294,4 +298,5 @@ __all__ = [
     "resolve_target_strict_score",
     "score_snapshot",
     "scoped_issues",
+    "strict_overall_scores",
 ]

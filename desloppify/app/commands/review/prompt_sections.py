@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 from typing import TypedDict
 
 from desloppify.intelligence.review.feedback_contract import (
@@ -321,6 +324,7 @@ def _coerce_finding_counts(raw: object) -> dict[str, int]:
         try:
             normalized = int(count)
         except (TypeError, ValueError):
+            logger.debug("Skipping non-integer detector count: %s=%r", det, count)
             continue
         if normalized > 0:
             counts[det] = normalized

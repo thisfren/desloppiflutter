@@ -126,7 +126,7 @@ class TestCountOpenByDetector:
         assert result == {"structural": 4}
 
     def test_structural_merge_set_matches_constant(self):
-        assert STRUCTURAL_MERGE == {"large", "complexity", "gods", "concerns"}
+        assert STRUCTURAL_MERGE == {"large", "complexity", "gods", "concerns", "flat_dirs"}
 
     def test_non_structural_not_merged(self):
         """Detectors not in STRUCTURAL_MERGE stay separate."""

@@ -8,7 +8,11 @@ State persistence calls this module, never the reverse.
 
 from __future__ import annotations
 
+import logging
+
 from desloppify.base.enums import issue_status_tokens
+
+logger = logging.getLogger(__name__)
 from desloppify.engine._scoring.detection import merge_potentials
 from desloppify.engine._scoring.results.core import (
     compute_health_score,
@@ -105,7 +109,7 @@ def _resolve_allowed_subjective_dimensions(
         if dims:
             return set(dims)
     except (ImportError, AttributeError) as exc:
-        _ = exc
+        logger.debug("could not load dimensions for lang %r: %s", lang_name, exc)
     return None
 
 

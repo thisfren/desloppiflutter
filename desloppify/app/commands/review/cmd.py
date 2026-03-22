@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 from desloppify.app.commands.helpers.lang import resolve_lang
 from desloppify.app.commands.helpers.command_runtime import command_runtime
@@ -71,7 +74,7 @@ def _enable_live_review_output() -> None:
         try:
             reconfigure(line_buffering=True, write_through=True)
         except (OSError, ValueError, TypeError) as exc:
-            _ = exc
+            logger.debug("could not reconfigure stream %s: %s", stream_name, exc)
 
 
 def _require_lang(lang) -> None:
